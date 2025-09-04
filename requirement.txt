@@ -1,0 +1,7 @@
+python-binance
+websocket-client
+pandas
+numpy
+python-telegram-bot
+dotenv
+mplfinance
