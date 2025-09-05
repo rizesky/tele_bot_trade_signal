@@ -2,11 +2,14 @@ import json
 import logging
 
 import pandas as pd
-from playwright.sync_api import sync_playwright
+from playwright.async_api import Browser
+
+from config import DEFAULT_TP_PERCENTS
 
 
 class TradingViewChart:
-    def __init__(self, width=1200, height=600):
+    def __init__(self, browser: Browser, width=1200, height=600):
+        self.browser = browser
         self.width = width
         self.height = height
 
@@ -51,14 +54,8 @@ class TradingViewChart:
 
         return ohlc_data, rsi_data, ma_data
 
-    def calculate_levels(self, ss_df, tp_percentages=[1, 2, 3, 4], sl_percentage=2):
-        """Calculate TP and SL levels based on latest price"""
-        latest_price = float(ss_df['close'].iloc[-1])
-        tp_levels = [latest_price * (1 + pct / 100) for pct in tp_percentages]
-        sl_level = latest_price * (1 - sl_percentage / 100)
-        return tp_levels, sl_level
-
-    def create_html(self, ohlc_data, rsi_data=None, ma_data=None, tp_levels=None, sl_level=None, symbol=""):
+    @staticmethod
+    def create_html(ohlc_data, rsi_data=None, ma_data=None, tp_levels=None, sl_level=None, symbol="",width=1200, height=600):
         """Create HTML with TradingView chart by loading a template file"""
 
         # --- Pre-processing Step: Filter and Sort Data ---
@@ -92,7 +89,6 @@ class TradingViewChart:
 
         # Define the path to the HTML template file
         template_path = "templates/chart_template.pyhtml"
-        # template_path = "templates/test.html"
 
         try:
             # Read the HTML template file
@@ -106,7 +102,9 @@ class TradingViewChart:
                 rsi_json=rsi_json,
                 ma_json=ma_json,
                 tp_json=tp_json,
-                sl_json=sl_json
+                sl_json=sl_json,
+                width=width,
+                height=height,
             )
             return rendered_html
 
@@ -117,73 +115,33 @@ class TradingViewChart:
             logging.error(f"An error occurred: {e}")
             return f"<html><body><h1>An error occurred: {e}</h1></body></html>"
 
-    def take_screenshot(self, ss_df, symbol="Chart", output_path="",
-                        tp_percentages=[1, 2, 3, 4], sl_percentage=2)-> str | None:
-
+    async def take_screenshot_async(self, ss_df, symbol="Chart", output_path="",
+                                    tp_levels=None, sl_level=None):
         """
-        Generate chart screenshot
-
-        Args:
-            ss_df: DataFrame with datetime index and columns [open, high, low, close, RSI, MA]
-            symbol: Chart title
-            output_path: Output file path
-            tp_percentages: TP levels as percentages above current price
-            sl_percentage: SL level as percentage below current price
+        Asynchronously generate chart screenshot using the shared browser instance.
         """
-        if output_path == "":
-            raise Exception("output_path is empty")
+        if tp_levels is None:
+            tp_levels = []
+
+        if not output_path:
+            raise ValueError("output_path cannot be empty")
+
         try:
-            # Prepare data
             ohlc_data, rsi_data, ma_data = self.prepare_data(ss_df)
             if not ohlc_data:
-                print("Error: No valid OHLC data found")
+                logging.error("No valid OHLC data found")
                 return None
 
-            # Calculate levels
-            tp_levels, sl_level = self.calculate_levels(ss_df, tp_percentages, sl_percentage)
-
-            # Create HTML
             html = self.create_html(ohlc_data, rsi_data, ma_data, tp_levels, sl_level, symbol)
 
-            # Screenshot with Playwright
-            with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
-                page = browser.new_page(viewport={'width': self.width + 100, 'height': self.height + 100})
-                page.set_content(html)
-                # page.pause()
-                # return
-                page.wait_for_function("document.querySelector('#chart canvas')", timeout=10000)
-                page.wait_for_timeout(1000)  # Wait for rendering
-
-                page.screenshot(path=output_path, clip={
-                    'x': 0, 'y': 0, 'width': self.width + 40, 'height': self.height + 40
-                })
-                browser.close()
+            page = await self.browser.new_page(viewport={'width': self.width + 100, 'height': self.height + 100})
+            await page.set_content(html)
+            await page.wait_for_selector('#chart canvas', state="visible", timeout=10000)
+            chart_container = page.locator('.container')
+            await chart_container.screenshot(path=output_path)
+            await page.close()
             return output_path
 
         except Exception as e:
+            logging.error(f"Error taking screenshot: {e}")
             raise e
-
-
-# Simple usage example
-if __name__ == "__main__":
-    # Sample data with your DataFrame format
-    dates = pd.date_range('2025-09-01 19:30:00', periods=100, freq='30T')
-    df = pd.DataFrame({
-        'open': [109000 + i * 50 for i in range(100)],
-        'high': [109000 + i * 50 + 200 for i in range(100)],
-        'low': [109000 + i * 50 - 150 for i in range(100)],
-        'close': [(109000 + i * 50) - 30 if i<50 else +25 for i in range(100)],
-        'RSI': [50 + (i % 30) if i > 20 else None for i in range(100)],
-        'MA': [109000 + i * 45 if i > 10 else None for i in range(100)]
-    }, index=dates)
-
-    # Generate chart
-    chart = TradingViewChart(width=1200, height=600)
-    chart.take_screenshot(
-        ss_df=df,
-        symbol="BTCUSDT Analysis",
-        output_path="simple_chart.png",
-        tp_percentages=[1, 2, 3, 4],
-        sl_percentage=2
-    )

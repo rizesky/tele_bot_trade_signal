@@ -4,11 +4,11 @@ from urllib.error import HTTPError
 
 import requests
 
-from config import TELEGRAM_SEND_MESSAGE_URL, TELEGRAM_CHAT_ID, LEVERAGE
+from config import TELEGRAM_SEND_MESSAGE_URL, TELEGRAM_CHAT_ID
 
 
 def format_signal_message(symbol: str, interval: str, entry_prices: list,
-                          signal_details: list, sl_price: float) -> str:
+                          signal_details: list, sl_price: float,leverage, margin_type) -> str:
     """
     Multi-line message.
     """
@@ -29,7 +29,7 @@ def format_signal_message(symbol: str, interval: str, entry_prices: list,
            f"Entry price :\n{entry_str}\n\n"
            f"- ⏳ - Signal details :\n{details_str}\n\n"
            f"❌ Stop-Loss : {sl_price:.6f}\n"
-           f"🧲 Leverage : {LEVERAGE}")
+           f"🧲 Leverage : {leverage}x [{margin_type}]\n")
     return msg
 
 

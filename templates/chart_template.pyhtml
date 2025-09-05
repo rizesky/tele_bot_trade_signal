@@ -19,7 +19,7 @@
 
         .container {{
             width: 100%;
-            max-width: 1024px;
+            max-width: {width}px;
             text-align: center;
             border: 1px solid #E5E7EB;
             border-radius: 12px;
@@ -37,7 +37,7 @@
 
         #chart {{
             width: 100%;
-            height: 600px;
+            height: {height}px;
         }}
     </style>
 </head>
@@ -68,7 +68,7 @@
             const container = document.getElementById('chart');
             const chart = LightweightCharts.createChart(container, {{
                 width: container.clientWidth,
-                height: 600,
+                height: height: {height},
                 layout: {{
                     background: {{ color: '#ffffff' }},
                     textColor: '#1F2937',

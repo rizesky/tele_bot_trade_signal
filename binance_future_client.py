@@ -12,8 +12,8 @@ class BinanceFuturesClient:
         Initializes the Binance client.
 
         Args:
-            api_key (str): Your Binance API key.
-            api_secret (str): Your Binance API secret.
+            api_key (str):  Binance API key.
+            api_secret (str):  Binance API secret.
         """
         self.client = Client(api_key, api_secret)
 
