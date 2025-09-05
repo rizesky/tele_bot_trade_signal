@@ -1,7 +1,7 @@
 
 
 def check_signal(df):
-    """Contoh trigger signal"""
+    """Trigger signal"""
     df["RSI"] = compute_rsi(df["close"])
     df["MA"] = compute_ma(df["close"], 14)
 

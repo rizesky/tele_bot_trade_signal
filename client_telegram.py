@@ -1,5 +1,6 @@
 import logging
 import os
+from urllib.error import HTTPError
 
 import requests
 
@@ -9,7 +10,7 @@ from config import TELEGRAM_SEND_MESSAGE_URL, TELEGRAM_CHAT_ID, LEVERAGE
 def format_signal_message(symbol: str, interval: str, entry_prices: list,
                           signal_details: list, sl_price: float) -> str:
     """
-    Multi-line message untuk sinyal trading.
+    Multi-line message.
     """
     tf_label = {
         "15m": "Short-Term",
@@ -37,25 +38,36 @@ def send_message(text: str, chart_path: str = None):
     Kirim pesan ke Telegram, dengan optional chart sebagai photo.
     """
     try:
+        def escape_markdown(text: str) -> str:
+            escape_chars = r'_*[]()~`>#+-=|{}.!'
+            return ''.join(f'\\{c}' if c in escape_chars else c for c in text)
+
         if chart_path:
             url = TELEGRAM_SEND_MESSAGE_URL.replace("sendMessage", "sendPhoto")
             with open(chart_path, "rb") as photo:
                 r = requests.post(
                     url,
-                    data={"chat_id": TELEGRAM_CHAT_ID, "caption": text, "parse_mode": "Markdown"},
+                    data={
+                        "chat_id": TELEGRAM_CHAT_ID,
+                        "caption": escape_markdown(text),
+                        "parse_mode": "MarkdownV2"
+                    },
                     files={"photo": photo},
                     timeout=15
                 )
         else:
             payload = {
                 "chat_id": TELEGRAM_CHAT_ID,
-                "text": text,
-                "parse_mode": "Markdown"
+                "text": escape_markdown(text),
+                "parse_mode": "MarkdownV2"
             }
             r = requests.post(TELEGRAM_SEND_MESSAGE_URL, json=payload, timeout=15)
 
         r.raise_for_status()
         return r.json()
+    except HTTPError as e:
+        logging.error("Failed to send telegram message", exc_info=e)
+        return None
     except Exception as e:
         logging.error("Failed to send telegram message", exc_info=e)
         return None

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TradingView Lightweight Chart</title>
+    <!-- Custom CSS for styling the chart container and its elements -->
+    <style>
+        body {{
+            background-color: #F9FAFB;
+            font-family: sans-serif;
+            color: #1F2937;
+            padding: 32px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }}
+
+        .container {{
+            width: 100%;
+            max-width: 1024px;
+            text-align: center;
+            border: 1px solid #E5E7EB;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+            background-color: #ffffff;
+        }}
+
+        .title {{
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: #1F2937;
+            margin-bottom: 1rem;
+        }}
+
+        #chart {{
+            width: 100%;
+            height: 600px;
+        }}
+    </style>
+</head>
+<body>
+    <!-- The new container for the chart, as you requested -->
+    <div class="container">
+        <div class="title">{symbol}</div>
+        <div id="chart"></div>
+    </div>
+
+    <!-- Lightweight Charts library from TradingView -->
+    <script src="https://cdn.jsdelivr.net/npm/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+
+    <script>
+        // Use an immediately invoked function to encapsulate the script
+        (function() {{
+            // Provided data
+            const chartData = {ohlc_json}
+            // Sample data for MA, RSI, TP, and SL since we don't have a backend
+            const maData =  {ma_json}
+            const rsiData = {rsi_json}
+            const tpLevels = {tp_json};
+            const slLevel = {sl_json};
+
+            window.aData = {{chartData, maData, rsiData, tpLevels,slLevel}}
+
+            // Get the container element and define the chart
+            const container = document.getElementById('chart');
+            const chart = LightweightCharts.createChart(container, {{
+                width: container.clientWidth,
+                height: 600,
+                layout: {{
+                    background: {{ color: '#ffffff' }},
+                    textColor: '#1F2937',
+                }},
+                grid: {{
+                    vertLines: {{ color: '#E5E7EB' }},
+                    horzLines: {{ color: '#E5E7EB' }},
+                }},
+                // Define the main price scale
+                rightPriceScale: {{
+                    borderColor: '#D1D5DB',
+                }},
+                // Define a new price scale for the TP/SL lines
+                leftPriceScale: {{
+                    visible: true,
+                    borderColor: '#D1D5DB',
+                }},
+                timeScale: {{
+                    borderColor: '#D1D5DB',
+                    timeVisible: true,
+                    secondsVisible: false,
+                }},
+                // Disable all user interactions to make the chart static
+                handleScroll: false,
+                handleScale: false,
+            }});
+
+            // Add the candlestick series to the chart
+            const candlestickSeries = chart.addSeries(LightweightCharts.CandlestickSeries, {{
+                upColor: '#22c55e',
+                downColor: '#ef4444',
+                borderVisible: false,
+                wickUpColor: '#22c55e',
+                wickDownColor: '#ef4444',
+            }});
+            candlestickSeries.setData(chartData);
+
+            // Add MA line to the main price scale
+            if (maData && maData.length > 0) {{
+                const maSeries = chart.addSeries(LightweightCharts.LineSeries, {{
+                    color: '#2196f3',
+                    lineWidth: 2,
+                    title: 'MA'
+                }});
+                maSeries.setData(maData);
+            }}
+
+            // Add RSI line (on a separate scale)
+            if (rsiData && rsiData.length > 0) {{
+                const rsiSeries = chart.addSeries(LightweightCharts.LineSeries, {{
+                    color: '#ff9800',
+                    lineWidth: 1,
+                    priceScaleId: 'rsi',
+                    title: 'RSI'
+                }});
+                rsiSeries.setData(rsiData);
+                chart.priceScale('rsi').applyOptions({{
+                    scaleMargins: {{ top: 0.8, bottom: 0 }},
+                }});
+            }}
+
+            // Add TP/SL Lines to the new price scale
+            if (chartData.length > 0) {{
+                // TP colors with 60% transparency
+                const colors = ['rgba(76, 175, 80, 0.4)', 'rgba(139, 195, 74, 0.4)', 'rgba(205, 220, 57, 0.4)', 'rgba(255, 235, 59, 0.4)'];
+                const startTime = chartData[0].time;
+                const endTime = chartData[chartData.length - 1].time;
+
+                // Add TP levels with thicker, solid lines
+                if (tpLevels && tpLevels.length > 0) {{
+                    tpLevels.forEach((level, i) => {{
+                        const tpSeries = chart.addSeries(LightweightCharts.LineSeries, {{
+                            color: colors[i % colors.length],
+                            lineWidth: 10,
+                            lineStyle: LightweightCharts.LineStyle.Solid,
+                            title: `TP${{i + 1}}`,
+                            priceScaleId: 'left' // Assign to the left price scale
+                        }});
+                        tpSeries.setData([
+                            {{ time: startTime, value: level }},
+                            {{ time: endTime, value: level }}
+                        ]);
+                    }});
+                }}
+
+                // Add SL level with a thicker, solid line
+                if (slLevel !== null) {{
+                    const slSeries = chart.addSeries(LightweightCharts.LineSeries, {{
+                        color: 'rgba(244, 67, 54, 0.4)',
+                        lineWidth: 10,
+                        lineStyle: LightweightCharts.LineStyle.Solid,
+                        title: 'SL',
+                        priceScaleId: 'left' // Assign to the left price scale
+                    }});
+                    slSeries.setData([
+                        {{ time: startTime, value: slLevel }},
+                        {{ time: endTime, value: slLevel }}
+                    ]);
+                }}
+            }}
+
+            // Automatically fit the content to the view after the data is set
+            chart.timeScale().fitContent();
+        }})();
+    </script>
+</body>
+</html>

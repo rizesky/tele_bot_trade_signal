@@ -9,6 +9,7 @@ from util import build_streams
 
 
 class BinanceWS:
+    """Binance Websocket Client"""
     def __init__(self, on_message_callback):
         self.url = f"{BINANCE_WS_URL}/stream?streams={build_streams()}"
         self.on_message_callback = on_message_callback
@@ -23,9 +24,9 @@ class BinanceWS:
             on_message=self.on_message,
             on_error=self.on_error,
         )
-        t = threading.Thread(target=self._run_ws, daemon=True)
+        t = threading.Thread(name="binance_ws_client_t",target=self._run_ws, daemon=True)
         t.start()
-        logging.info(f"Binance WS listener started and connected to {self.url}")
+        logging.info(f"Binance WS Client started and listening to: {self.url}")
 
     def _run_ws(self):
         while not self.stop_event.is_set():

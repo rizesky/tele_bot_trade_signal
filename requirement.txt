@@ -5,3 +5,4 @@ numpy
 python-telegram-bot
 dotenv
 mplfinance
+playwright
