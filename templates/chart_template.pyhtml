@@ -172,6 +172,7 @@
 
             // Automatically fit the content to the view after the data is set
             chart.timeScale().fitContent();
+            window.chartReady = true; //This is important to signal playwright that chart actually already drawn
         }})();
     </script>
 </body>

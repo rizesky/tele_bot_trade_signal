@@ -137,9 +137,13 @@ class TradingViewChart:
             page.on("pageerror", lambda x: logging.error(f"Browser JS Error: {x}"))
             await page.set_content(html)
 
-
+            # Wait for the chart canvas to exist
             await page.wait_for_function("document.querySelector('#chart canvas')", timeout=10000)
-            await page.wait_for_timeout(1000)
+            # Wait until the chart has finished drawing
+            await page.wait_for_function("window.chartReady === true", timeout=10000)
+            # Optional: small extra delay
+            await page.wait_for_timeout(200)
+
             container = page.locator(".container")
             await container.screenshot(path=output_path)
             await page.close()
