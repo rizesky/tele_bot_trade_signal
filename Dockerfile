@@ -1,5 +1,9 @@
 FROM python:3.12-bookworm
 
+# Add locale environment variables (important for plawyright in the docker)
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+
 WORKDIR /app
 
 COPY requirements.txt .

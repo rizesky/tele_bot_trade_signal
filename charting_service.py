@@ -36,7 +36,9 @@ class ChartingService:
         """Initializes the Playwright browser."""
         try:
             self.playwright = await async_playwright().start()
-            self.browser = await self.playwright.chromium.launch(headless=True, args=['--no-sandbox'])
+            self.browser = await self.playwright.chromium.launch(headless=True, args=['--no-sandbox'],devtools=False)
+            logging.info(f"Browser type: {self.browser.browser_type.name}")
+            logging.info(f"Browser version: {self.browser.version}")
             self.chart_generator = TradingViewChart(width=1200, height=600, browser=self.browser)
             self._is_ready.set()
             logging.info("Charting service is ready and browser context initialized.")

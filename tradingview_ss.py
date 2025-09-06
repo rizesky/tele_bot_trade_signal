@@ -125,6 +125,7 @@ class TradingViewChart:
         if not output_path:
             raise ValueError("output_path cannot be empty")
 
+        page=None
         try:
             ohlc_data, rsi_data, ma_data = self.prepare_data(ss_df)
             if not ohlc_data:
@@ -144,11 +145,47 @@ class TradingViewChart:
             # Optional: small extra delay
             await page.wait_for_timeout(200)
 
+            # Verify canvas has content (non-zero dimensions)
+            canvas_info = await page.evaluate("""
+                        () => {
+                            const canvas = document.querySelector('#chart canvas');
+                            if (!canvas) return { exists: false };
+                            return {
+                                exists: true,
+                                width: canvas.width,
+                                height: canvas.height,
+                                hasContent: canvas.width > 0 && canvas.height > 0
+                            };
+                        }
+                    """)
+
+            logging.info(f"Canvas info: {canvas_info}")
+
+            if not canvas_info.get('hasContent', False):
+                raise Exception("Chart canvas has no content")
+
+
             container = page.locator(".container")
             await container.screenshot(path=output_path)
             await page.close()
             return output_path
 
+
         except Exception as e:
-            logging.error(f"Error taking screenshot: {e}")
+            logging.error(f"Chart rendering failed: {e}")
+            # Debug information
+            if page is not None:
+                page_content = await page.content()
+                logging.debug(f"Page content length: {len(page_content)}")
+                # Check if external resources loaded
+                try:
+                    js_loaded = await page.evaluate("typeof window.LightweightCharts !== 'undefined'")
+                    logging.info(f"TradingView JS loaded: {js_loaded}")
+                except Exception as e:
+                    raise e
             raise e
+
+
+        finally:
+
+            await page.close()
