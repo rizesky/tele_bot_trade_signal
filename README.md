@@ -7,8 +7,7 @@ Tele Bot Trading is a Python-based signal bot designed to provide trading signal
  - **Telegram Integration**: Delivers formatted signal messages to a Telegram channel.
  - **Chart Generation**: Creates visual candlestick charts with signal-specific entry points, take-profit (TP) levels, and stop-loss (SL) levels.
  - **Performance**: Uses a dedicated background thread for chart rendering with Playwright for improved efficiency and resource management.
- - **Configurable**: All key parameters are managed via a .env file, allowing easy adjustments without code changes.
- - **Simulation Mode**: Includes a testing mode to generate simulated signals for development and validation purposes.
+ - **Simulation Mode**: Includes a simulation mode to lower the signal cooldown and minimum klines requirement for development and validation purposes.
  - **Containerized**: Optimized for deployment in a Docker container. 
 
 ## Getting Started
@@ -37,8 +36,11 @@ Tele Bot Trading is a Python-based signal bot designed to provide trading signal
 
 
 ### Configuration
-Copy the .env.example file to .env and fill in your credentials and preferences.
-`cp .env.example .env` . Edit the .env file:env
+- Copy the `.env.example` file to `.env` and fill in your credentials and preferences.
+    ```
+    cp .env.example .env
+    ```
+- Edit the .env file as per your need
 
 ### Usage
 #### Run with Docker (Recommended)

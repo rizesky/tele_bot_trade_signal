@@ -1,8 +1,6 @@
 import logging
 import time
 
-from binance import MARGIN_BUY_TYPE
-
 import config
 from charting_service import ChartingService
 from config import MAX_LEVERAGE
@@ -15,7 +13,6 @@ from util import create_realistic_test_data
 
 class StrategyExecutor:
     """Handles the execution of trading strategies and manages signals."""
-
     def __init__(self, trade_manager:TradeManager|None,charting_service:ChartingService|None,risk_manager:RiskManager|None):
         self.trade_manager = trade_manager
         self.signal_cooldown = {}

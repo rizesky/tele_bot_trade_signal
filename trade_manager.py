@@ -1,9 +1,9 @@
 import logging
 
 import pandas as pd
-from binance_future_client import BinanceFuturesClient
 
 import config
+from binance_future_client import BinanceFuturesClient
 from symbol_manager import SymbolManager
 
 
@@ -35,7 +35,7 @@ class TradeManager:
             logging.error("Symbol list is empty, cannot load historical data.")
             return
 
-        for symbol in config.SYMBOLS:
+        for symbol in symbols:
             logging.info(f"Loading historical data for {symbol} {config.TIMEFRAMES}")
             for interval in config.TIMEFRAMES:
                 key = (symbol, interval)

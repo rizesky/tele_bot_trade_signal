@@ -4,8 +4,6 @@ import logging
 import pandas as pd
 from playwright.async_api import Browser
 
-from config import DEFAULT_TP_PERCENTS
-
 
 class TradingViewChart:
     def __init__(self, browser: Browser, width=1200, height=600):
@@ -13,7 +11,8 @@ class TradingViewChart:
         self.width = width
         self.height = height
 
-    def prepare_data(self, raw_df):
+    @staticmethod
+    def prepare_data(raw_df):
         """
         Convert DataFrame to TradingView format
         Works with either a 'time' column (UNIX seconds) or a datetime index.
@@ -135,10 +134,14 @@ class TradingViewChart:
             html = self.create_html(ohlc_data, rsi_data, ma_data, tp_levels, sl_level, symbol)
 
             page = await self.browser.new_page(viewport={'width': self.width + 100, 'height': self.height + 100})
+            page.on("pageerror", lambda x: logging.error(f"Browser JS Error: {x}"))
             await page.set_content(html)
-            await page.wait_for_selector('#chart canvas', state="visible", timeout=10000)
-            chart_container = page.locator('.container')
-            await chart_container.screenshot(path=output_path)
+
+
+            await page.wait_for_function("document.querySelector('#chart canvas')", timeout=10000)
+            await page.wait_for_timeout(1000)
+            container = page.locator(".container")
+            await container.screenshot(path=output_path)
             await page.close()
             return output_path
 

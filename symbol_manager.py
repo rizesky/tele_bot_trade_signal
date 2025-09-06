@@ -21,7 +21,7 @@ class SymbolManager:
 
     def start(self):
         """Starts the worker thread to periodically refresh symbols."""
-        if config.SYMBOLS:
+        if len(config.SYMBOLS)>0:
             logging.info(f"Using symbols from config: {config.SYMBOLS}. Automatic refresh disabled.")
             self.symbols = config.SYMBOLS
         else:

@@ -4,11 +4,11 @@ import os
 import numpy as np
 import pandas as pd
 
-from config import BINANCE_ENV, SYMBOLS, TIMEFRAMES
+from config import BINANCE_ENV, TIMEFRAMES
 
 symbol_separator = "&" if BINANCE_ENV == "dev" else "/" # for dev, we can hit testnet.binance.vision, and usually the separator is different from the prod
 
-def build_streams(symbols=SYMBOLS):
+def build_streams(symbols):
     """Create URL stream multiple symbols & interval"""
     streams = []
     for sym in symbols:

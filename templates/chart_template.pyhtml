@@ -29,7 +29,7 @@
         }}
 
         .title {{
-            font-size: 2.5rem;
+            font-size: 2.0rem;
             font-weight: 800;
             color: #1F2937;
             margin-bottom: 1rem;
@@ -67,8 +67,8 @@
             // Get the container element and define the chart
             const container = document.getElementById('chart');
             const chart = LightweightCharts.createChart(container, {{
-                width: container.clientWidth,
-                height: height: {height},
+                width: container.offsetWidth,
+                height: container.offsetHeight,
                 layout: {{
                     background: {{ color: '#ffffff' }},
                     textColor: '#1F2937',
@@ -93,7 +93,7 @@
                 }},
                 // Disable all user interactions to make the chart static
                 handleScroll: false,
-                handleScale: false,
+                //handleScale: false,
             }});
 
             // Add the candlestick series to the chart

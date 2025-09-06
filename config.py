@@ -4,13 +4,30 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+def _get_symbols_from_env() -> list[str]:
+    """Helper function to get symbols from the environment and handle empty values."""
+    env_symbols = os.getenv("SYMBOLS", "")
+    if env_symbols:
+        return [s.strip().upper() for s in env_symbols.split(",")]
+    return []
+
+def _get_timeframes_from_env() -> list[str]:
+    """Helper function to get timeframes from the environment and handle empty values."""
+    env_timeframes = os.getenv("TIMEFRAMES", "")
+    if env_timeframes:
+        return [tf.strip() for tf in env_timeframes.split(",")]
+    return []
+
+
 BINANCE_WS_URL = os.getenv("BINANCE_WS_URL")
 BINANCE_ENV=os.getenv("BINANCE_ENV", "dev")
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET")
 
-SYMBOLS = [s.strip().upper() for s in os.getenv("SYMBOLS", "").split(",")]
-TIMEFRAMES = [tf.strip() for tf in os.getenv("TIMEFRAMES", "").split(",")]
+
+SYMBOLS = _get_symbols_from_env()
+TIMEFRAMES = _get_timeframes_from_env()
+
 MAX_LEVERAGE = os.getenv("MAX_LEVERAGE", "20")
 FILTER_BY_MARKET_CAP= True if int(os.getenv("FILTER_BY_MARKET_CAP", 0)) == 1 else False # Default true
 

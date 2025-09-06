@@ -79,7 +79,7 @@ def send_message_with_retry(msg:str, chart_path=None, max_retries=3):
     if chart_path and os.path.exists(chart_path):
         # Validate image file
         file_size = os.path.getsize(chart_path)
-        logging.info(f"Image file size: {file_size} bytes")
+        logging.info(f"chart image file size: {file_size} bytes")
 
         # Check if file is too large (Telegram limit is 50MB, but let's be conservative)
         if file_size > 20 * 1024 * 1024:  # 20MB limit
