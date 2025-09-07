@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
@@ -7,6 +8,38 @@ import pandas as pd
 from config import BINANCE_ENV, TIMEFRAMES
 
 symbol_separator = "&" if BINANCE_ENV == "dev" else "/" # for dev, we can hit testnet.binance.vision, and usually the separator is different from the prod
+
+
+def now_utc() -> datetime:
+    """
+    Get current UTC datetime.
+    """
+    return datetime.now(timezone.utc)
+
+
+def now_utc_timestamp() -> float:
+    """
+    Get current UTC timestamp (Unix seconds).
+    """
+    return now_utc().timestamp()
+
+
+def now_utc_strftime(format_str: str = "%Y%m%d-%H%M%S") -> str:
+    """
+    Get current UTC datetime formatted as string.
+    
+    Args:
+        format_str (str): Format string for datetime
+    """
+    return now_utc().strftime(format_str)
+
+
+def pd_now_utc() -> pd.Timestamp:
+    """
+    Get current UTC timestamp as pandas Timestamp.
+    """
+    return pd.Timestamp.now(tz='UTC')
+
 
 def build_streams(symbols):
     """Create URL stream multiple symbols & interval"""
@@ -63,7 +96,7 @@ def compress_image(image_path, max_size_kb=1024):
 
 def create_realistic_test_data(periods=200, base_price=30000):
     np.random.seed(42)
-    dates = pd.date_range(end=pd.Timestamp.now(), periods=periods, freq="15min")
+    dates = pd.date_range(end=pd_now_utc(), periods=periods, freq="15min")
 
     # Create price movement with trend and noise
     trend = np.linspace(0, 0.02, periods)

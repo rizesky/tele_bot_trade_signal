@@ -4,6 +4,8 @@ import time
 from binance.exceptions import BinanceAPIException, BinanceRequestException
 
 from binance_future_client import BinanceFuturesClient
+import config
+from database import get_database
 
 
 class RiskManager:
@@ -21,6 +23,9 @@ class RiskManager:
         self._position_cache = {}
         # Cache duration in seconds
         self.CACHE_EXPIRY = 300  # 5 minutes
+        
+        # Database integration for persistent caching
+        self.db = get_database() if config.DB_ENABLE_PERSISTENCE else None
 
     # --- Market Cap Filtering (using CoinGecko) ---
     # Free tier CoinGecko API has rate limits and might not provide real-time updates.
@@ -30,8 +35,8 @@ class RiskManager:
         if self._coingecko_client is None:
             try:
                 from pycoingecko import CoinGeckoAPI
-                # You might need an API key for higher rate limits or specific endpoints
-                # cg_api_key = config.COINGECKO_API_KEY # If you have one
+                # An API key may be needed for higher rate limits or specific endpoints
+                # cg_api_key = config.COINGECKO_API_KEY # If available
                 # self._coingecko_client = CoinGeckoAPI(api_key=cg_api_key) if cg_api_key else CoinGeckoAPI()
                 self._coingecko_client = CoinGeckoAPI()  # Using the free tier
                 logging.info("CoinGecko API client initialized.")
@@ -44,7 +49,7 @@ class RiskManager:
         """
         Fetches the current market capitalization for a given coin_id from CoinGecko.
         Note: CoinGecko uses 'bitcoin', 'ethereum' as IDs, not 'BTCUSDT', 'ETHUSDT'.
-        You'll need a mapping from Binance symbol to CoinGecko ID.
+        A mapping from Binance symbol to CoinGecko ID is required.
         """
         cg = self._get_coingecko_client()
         if not cg:
@@ -52,7 +57,7 @@ class RiskManager:
 
         try:
             # Use 'get_coins_markets' for market cap data
-            # vs_currency should match your strategy's quote asset (e.g., 'usd')
+            # vs_currency should match the strategy's quote asset (e.g., 'usd')
             market_data = cg.get_coins_markets(vs_currency='usd', ids=coin_id)
             if market_data and market_data[0].get('market_cap'):
                 return float(market_data[0]['market_cap'])
@@ -94,42 +99,52 @@ class RiskManager:
     def get_configured_leverage_and_margin_type(self, symbol: str) -> tuple[int, str]:
         """
         Retrieves the currently configured leverage and margin type for a symbol,
-        using a local cache with an expiry.
+        using a local cache with an expiry and proper error handling.
 
         Args:
             symbol (str): The trading pair symbol (e.g., 'BTCUSDT').
 
         Returns:
-            tuple[int, str]: A tuple containing (leverage, marginType), or (None, None) if not found.
+            tuple[int, str]: A tuple containing (leverage, marginType), with fallback defaults.
         """
-        current_time = time.time()
+        # 1. Check database cache first (persistent across restarts)
+        if self.db:
+            cached_info = self.db.get_cached_position_info(symbol, max_age_hours=1)
+            if cached_info:
+                logging.debug(f"Fetching leverage and margin from database cache for symbol {symbol}.")
+                return cached_info
 
-        # 1. Check if the data exists in the cache and is not expired
+        # 2. Check in-memory cache
+        current_time = time.time()
         if symbol in self._position_cache:
             cache_entry = self._position_cache[symbol]
             if current_time - cache_entry['timestamp'] < self.CACHE_EXPIRY:
-                logging.info(f"Fetching leverage and margin from cache for symbol {symbol}.")
+                logging.debug(f"Fetching leverage and margin from memory cache for symbol {symbol}.")
                 return cache_entry['leverage'], cache_entry['margin_type']
             else:
-                logging.info(f"Cache for symbol {symbol} has expired. Calling API.")
+                logging.info(f"Memory cache for symbol {symbol} has expired. Calling API.")
 
-        # 2. If cache is not present or expired, call the API
+        # 3. If cache is not present or expired, call the API
         try:
             positions = self.binance_client.client.futures_position_information()
 
             for position in positions:
                 if position.get('symbol') == symbol:
-                    leverage = int(position.get('leverage'))
-                    margin_type = position.get('marginType')
+                    leverage = int(position.get('leverage', 20))  # Default to 20 if missing
+                    margin_type = position.get('marginType', 'ISOLATED')  # Default to ISOLATED if missing
 
-                    # Store the new data in the cache with the current timestamp
+                    # Store the new data in both memory and database cache
                     self._position_cache[symbol] = {
                         'leverage': leverage,
                         'margin_type': margin_type,
                         'timestamp': current_time
                     }
+                    
+                    # Store in database for persistence
+                    if self.db:
+                        self.db.cache_position_info(symbol, leverage, margin_type)
 
-                    logging.info(f"Fetching leverage and margin from API for symbol {symbol}.")
+                    logging.info(f"Fetched leverage and margin from API for symbol {symbol}: {leverage}x {margin_type}")
                     return leverage, margin_type
 
             # If no position is found, return default values and cache them
@@ -140,11 +155,11 @@ class RiskManager:
                 'margin_type': default_margin,
                 'timestamp': current_time
             }
-            logging.info(f"Position for symbol {symbol} not found. Using default settings.")
+            logging.info(f"Position for symbol {symbol} not found. Using default settings: {default_leverage}x {default_margin}")
             return default_leverage, default_margin
 
         except (BinanceAPIException, BinanceRequestException) as e:
-            logging.error(f"Error fetching position info for {symbol} from API: {e}")
+            logging.error(f"API error fetching position info for {symbol}: {e}")
 
             # If the API call fails, try to return stale data from the cache as a fallback
             if symbol in self._position_cache:
@@ -152,8 +167,14 @@ class RiskManager:
                 cache_entry = self._position_cache[symbol]
                 return cache_entry['leverage'], cache_entry['margin_type']
 
-            return (None, None)
+            # If no cache available, return safe defaults instead of None
+            logging.warning(f"No cache available for {symbol}. Using safe defaults: 20x ISOLATED")
+            return 20, 'ISOLATED'
+            
         except Exception as e:
-            logging.error(f"An unexpected error occurred while fetching position info: {e}")
-            return (None, None)
+            logging.error(f"Unexpected error fetching position info for {symbol}: {e}")
+            
+            # Return safe defaults instead of None to prevent crashes
+            logging.warning(f"Using safe defaults for {symbol}: 20x ISOLATED")
+            return 20, 'ISOLATED'
 

@@ -3,6 +3,7 @@ import logging
 
 import pandas as pd
 from playwright.async_api import Browser
+from structs import TradingViewChartData
 
 
 class TradingViewChart:
@@ -17,6 +18,11 @@ class TradingViewChart:
         Convert DataFrame to TradingView format
         Works with either a 'time' column (UNIX seconds) or a datetime index.
         """
+        # Validate input DataFrame
+        if raw_df is None or raw_df.empty:
+            logging.warning("prepare_data received None or empty DataFrame")
+            return [], [], []
+            
         ohlc_data = []
         rsi_data = []
         ma_data = []
@@ -26,7 +32,7 @@ class TradingViewChart:
             if "time" in row:
                 time_seconds = int(row["time"])
             else:
-                time_seconds = int(pd.to_datetime(idx).timestamp())
+                time_seconds = int(pd.to_datetime(idx, utc=True).timestamp())
 
             # OHLC
             ohlc_data.append({
@@ -54,27 +60,27 @@ class TradingViewChart:
         return ohlc_data, rsi_data, ma_data
 
     @staticmethod
-    def create_html(ohlc_data, rsi_data=None, ma_data=None, tp_levels=None, sl_level=None, symbol="",width=1200, height=600):
+    def create_html(chart_data: TradingViewChartData) -> str:
         """Create HTML with TradingView chart by loading a template file"""
 
         # --- Pre-processing Step: Filter and Sort Data ---
 
         # 1. Remove duplicates by time (if any exist)
         # A dictionary is a good way to get unique items
-        unique_ohlc = {d['time']: d for d in ohlc_data}.values()
+        unique_ohlc = {d['time']: d for d in chart_data.ohlc_data}.values()
 
         # 2. Sort the data by time in ascending order
         sorted_ohlc_data = sorted(unique_ohlc, key=lambda x: x['time'])
 
         # Apply the same logic for other time-series data
         sorted_ma_data = []
-        if ma_data:
-            unique_ma = {d['time']: d for d in ma_data}.values()
+        if chart_data.ma_data:
+            unique_ma = {d['time']: d for d in chart_data.ma_data}.values()
             sorted_ma_data = sorted(unique_ma, key=lambda x: x['time'])
 
         sorted_rsi_data = []
-        if rsi_data:
-            unique_rsi = {d['time']: d for d in rsi_data}.values()
+        if chart_data.rsi_data:
+            unique_rsi = {d['time']: d for d in chart_data.rsi_data}.values()
             sorted_rsi_data = sorted(unique_rsi, key=lambda x: x['time'])
 
 
@@ -83,8 +89,8 @@ class TradingViewChart:
         ohlc_json = json.dumps(sorted_ohlc_data)
         rsi_json = json.dumps(sorted_rsi_data or [])
         ma_json = json.dumps(sorted_ma_data or [])
-        tp_json = json.dumps(tp_levels or [])
-        sl_json = json.dumps(sl_level) if sl_level else "null"
+        tp_json = json.dumps(chart_data.tp_levels or [])
+        sl_json = json.dumps(chart_data.sl_level) if chart_data.sl_level else "null"
 
         # Define the path to the HTML template file
         template_path = "templates/chart_template.pyhtml"
@@ -96,14 +102,14 @@ class TradingViewChart:
 
             # Replace placeholders with dynamic data
             rendered_html = html_template.format(
-                symbol=symbol,
+                symbol=chart_data.symbol,
                 ohlc_json=ohlc_json,
                 rsi_json=rsi_json,
                 ma_json=ma_json,
                 tp_json=tp_json,
                 sl_json=sl_json,
-                width=width,
-                height=height,
+                width=chart_data.width,
+                height=chart_data.height,
             )
             return rendered_html
 
@@ -132,7 +138,17 @@ class TradingViewChart:
                 logging.error("No valid OHLC data found")
                 return None
 
-            html = self.create_html(ohlc_data, rsi_data, ma_data, tp_levels, sl_level, symbol)
+            chart_data = TradingViewChartData(
+                ohlc_data=ohlc_data,
+                rsi_data=rsi_data,
+                ma_data=ma_data,
+                tp_levels=tp_levels,
+                sl_level=sl_level,
+                symbol=symbol,
+                width=self.width,
+                height=self.height
+            )
+            html = self.create_html(chart_data)
 
             page = await self.browser.new_page(viewport={'width': self.width + 100, 'height': self.height + 100})
             page.on("pageerror", lambda x: logging.error(f"Browser JS Error: {x}"))

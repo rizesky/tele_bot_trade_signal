@@ -2,7 +2,9 @@ import asyncio
 import logging
 import os
 import threading
-from datetime import datetime
+
+from util import now_utc_strftime
+from structs import ChartData
 
 import pandas as pd
 from playwright.async_api import async_playwright
@@ -22,7 +24,7 @@ class ChartingService:
         )
         self._is_ready = threading.Event()
         self.chart_queue = asyncio.Queue()  # Use an asyncio queue for communication
-
+a
     def _run_async_loop(self):
         """Runs the async event loop in a separate thread."""
         asyncio.set_event_loop(self.loop)
@@ -49,16 +51,15 @@ class ChartingService:
         """Consumes tasks from the queue and executes them."""
         while True:
             try:
-                task_data = await self.chart_queue.get()
-                ohlc_df, symbol, timeframe, tp_levels, sl_level, callback = task_data
+                chart_data = await self.chart_queue.get()
                 try:
-                    chart_path = await self._async_plot_chart(ohlc_df, symbol, timeframe, tp_levels, sl_level)
-                    if callback:
-                        self.loop.call_soon_threadsafe(callback, chart_path, None)
+                    chart_path = await self._async_plot_chart(chart_data)
+                    if chart_data.callback:
+                        self.loop.call_soon_threadsafe(chart_data.callback, chart_path, None)
                 except Exception as e:
                     logging.error(f"Error during chart generation: {e}")
-                    if callback:
-                        self.loop.call_soon_threadsafe(callback, None, e)
+                    if chart_data.callback:
+                        self.loop.call_soon_threadsafe(chart_data.callback, None, e)
                 self.chart_queue.task_done()
             except asyncio.CancelledError:
                 break
@@ -76,29 +77,35 @@ class ChartingService:
         self.loop.call_soon_threadsafe(self.loop.stop)
         self.thread.join()
 
-    def submit_plot_chart_task(self, ohlc_df: pd.DataFrame, symbol: str, timeframe: str, tp_levels, sl_level, callback):
+    def submit_plot_chart_task(self, chart_data: ChartData):
         """
         Submits a chart plotting task to the async event loop without blocking.
         A callback function is provided to handle the result.
         """
+        # Validate input DataFrame
+        if chart_data.ohlc_df is None or chart_data.ohlc_df.empty:
+            logging.warning(f"Chart task skipped for {chart_data.symbol}-{chart_data.timeframe}: DataFrame is None or empty")
+            chart_data.callback(None)  # Call callback with None to indicate failure
+            return
+            
         self._is_ready.wait()  # Wait until the browser is ready
         self.loop.call_soon_threadsafe(
             self.chart_queue.put_nowait,
-            (ohlc_df, symbol, timeframe, tp_levels, sl_level, callback)
+            chart_data
         )
 
-    async def _async_plot_chart(self, ohlc_df: pd.DataFrame, symbol: str, timeframe: str, tp_levels, sl_level) -> str:
+    async def _async_plot_chart(self, chart_data: ChartData) -> str:
         """Asynchronous chart generation using the shared browser instance."""
-        chart_title = f"{symbol}_{timeframe}"
+        chart_title = f"{chart_data.symbol}_{chart_data.timeframe}"
         os.makedirs("charts", exist_ok=True)
-        chart_out_path = f"charts/{chart_title}_{datetime.now().strftime('%Y%m%d-%H%M%S')}.png"
+        chart_out_path = f"charts/{chart_title}_{now_utc_strftime()}.png"
 
         chart_filename = await self.chart_generator.take_screenshot_async(
-            ss_df=ohlc_df,
-            symbol=f"{symbol}-{timeframe}",
+            ss_df=chart_data.ohlc_df,
+            symbol=f"{chart_data.symbol}-{chart_data.timeframe}",
             output_path=chart_out_path,
-            tp_levels=tp_levels,
-            sl_level=sl_level
+            tp_levels=chart_data.tp_levels,
+            sl_level=chart_data.sl_level
         )
         if chart_filename is None:
             raise Exception("Chart is not generated, file not found")

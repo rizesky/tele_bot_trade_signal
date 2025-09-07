@@ -1,6 +1,8 @@
 import logging
 import threading
-from datetime import datetime, timedelta
+from datetime import timedelta
+
+from util import now_utc
 
 import config
 from binance_future_client import BinanceFuturesClient
@@ -51,7 +53,7 @@ class SymbolManager:
     def _refresh_symbols_worker(self):
         """Worker thread function to periodically refresh symbols."""
         while not self._stop_event.is_set():
-            now = datetime.now()
+            now = now_utc()
             if self._last_refresh_time is None or now - self._last_refresh_time > timedelta(
                     days=self._refresh_interval_days):
                 self._fetch_and_update_symbols()
@@ -67,6 +69,9 @@ class SymbolManager:
             new_symbols = self.binance_client.get_futures_symbols()
             if new_symbols:
                 with self._lock:
+                    #TODO delete this line, only for limit testing
+                    new_symbols = new_symbols[:100] if len(new_symbols) > 100 else new_symbols
+                    
                     self.symbols = new_symbols
                 logging.info(f"Symbols list refreshed. Total symbols: {len(new_symbols)}")
             else:

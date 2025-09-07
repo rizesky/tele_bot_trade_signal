@@ -24,28 +24,58 @@
             border: 1px solid #E5E7EB;
             border-radius: 12px;
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            padding: 2rem;
+            padding: 1.5rem;
+            padding-bottom: 2.5rem;  /* Extra bottom padding for TradingView logo */
             background-color: #ffffff;
-        }}
-
-        .title {{
-            font-size: 2.0rem;
-            font-weight: 800;
-            color: #1F2937;
-            margin-bottom: 1rem;
         }}
 
         #chart {{
             width: 100%;
             height: {height}px;
+            position: relative;
+        }}
+
+        .chart-overlay {{
+            position: absolute;
+            bottom: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.85);
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #1f2937;
+            z-index: 1000;
+            pointer-events: none;
+            text-align: center;
+            line-height: 1.4;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }}
+
+        .chart-date {{
+            font-size: 0.75rem;
+            font-weight: 400;
+            color: #6b7280;
+            margin-bottom: 2px;
+        }}
+
+        .chart-symbol-time {{
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #1f2937;
         }}
     </style>
 </head>
 <body>
     <!-- The new container for the chart, as you requested -->
     <div class="container">
-        <div class="title">{symbol}</div>
-        <div id="chart"></div>
+        <div id="chart">
+            <!-- Professional chart overlay like TradingView -->
+            <div class="chart-overlay">
+                <div class="chart-date" id="chart-date">Loading...</div>
+                <div class="chart-symbol-time" id="chart-symbol-time">Loading...</div>
+            </div>
+        </div>
     </div>
 
     <!-- Lightweight Charts library from TradingView -->
@@ -80,16 +110,17 @@
                 // Define the main price scale
                 rightPriceScale: {{
                     borderColor: '#D1D5DB',
-                }},
-                // Define a new price scale for the TP/SL lines
-                leftPriceScale: {{
                     visible: true,
-                    borderColor: '#D1D5DB',
+                }},
+                
+                leftPriceScale: {{
+                    visible: false,
                 }},
                 timeScale: {{
                     borderColor: '#D1D5DB',
-                    timeVisible: true,
+                    timeVisible: false,    // Hide time labels for cleaner look
                     secondsVisible: false,
+                    visible: false,        // Hide entire time scale
                 }},
                 // Disable all user interactions to make the chart static
                 handleScroll: false,
@@ -106,46 +137,28 @@
             }});
             candlestickSeries.setData(chartData);
 
-            // Add MA line to the main price scale
-            if (maData && maData.length > 0) {{
-                const maSeries = chart.addSeries(LightweightCharts.LineSeries, {{
-                    color: '#2196f3',
-                    lineWidth: 2,
-                    title: 'MA'
-                }});
-                maSeries.setData(maData);
-            }}
+            // MA line removed for cleaner chart appearance
+            // (MA data still calculated for signal logic but not displayed)
 
-            // Add RSI line (on a separate scale)
-            if (rsiData && rsiData.length > 0) {{
-                const rsiSeries = chart.addSeries(LightweightCharts.LineSeries, {{
-                    color: '#ff9800',
-                    lineWidth: 1,
-                    priceScaleId: 'rsi',
-                    title: 'RSI'
-                }});
-                rsiSeries.setData(rsiData);
-                chart.priceScale('rsi').applyOptions({{
-                    scaleMargins: {{ top: 0.8, bottom: 0 }},
-                }});
-            }}
+            // RSI line removed for cleaner chart appearance
+            // (RSI data still calculated for signal logic but not displayed)
 
-            // Add TP/SL Lines to the new price scale
+            // Add TP/SL Lines (simplified approach for better visibility)
             if (chartData.length > 0) {{
                 // TP colors with 60% transparency
                 const colors = ['rgba(76, 175, 80, 0.4)', 'rgba(139, 195, 74, 0.4)', 'rgba(205, 220, 57, 0.4)', 'rgba(255, 235, 59, 0.4)'];
                 const startTime = chartData[0].time;
                 const endTime = chartData[chartData.length - 1].time;
 
-                // Add TP levels with thicker, solid lines
+                // Add TP levels as full-width horizontal lines
                 if (tpLevels && tpLevels.length > 0) {{
                     tpLevels.forEach((level, i) => {{
                         const tpSeries = chart.addSeries(LightweightCharts.LineSeries, {{
                             color: colors[i % colors.length],
-                            lineWidth: 10,
+                            lineWidth: 8,
                             lineStyle: LightweightCharts.LineStyle.Solid,
                             title: `TP${{i + 1}}`,
-                            priceScaleId: 'left' // Assign to the left price scale
+                            priceScaleId: 'right'
                         }});
                         tpSeries.setData([
                             {{ time: startTime, value: level }},
@@ -154,14 +167,14 @@
                     }});
                 }}
 
-                // Add SL level with a thicker, solid line
+                // Add SL level as full-width horizontal line
                 if (slLevel !== null) {{
                     const slSeries = chart.addSeries(LightweightCharts.LineSeries, {{
                         color: 'rgba(244, 67, 54, 0.4)',
-                        lineWidth: 10,
+                        lineWidth: 8,
                         lineStyle: LightweightCharts.LineStyle.Solid,
                         title: 'SL',
-                        priceScaleId: 'left' // Assign to the left price scale
+                        priceScaleId: 'right'
                     }});
                     slSeries.setData([
                         {{ time: startTime, value: slLevel }},
@@ -170,8 +183,38 @@
                 }}
             }}
 
+            // Update chart overlay with dynamic information
+            function updateChartOverlay() {{
+                const dateElement = document.getElementById('chart-date');
+                const symbolTimeElement = document.getElementById('chart-symbol-time');
+                
+                if (dateElement && symbolTimeElement && chartData.length > 0) {{
+                    // Get current date in user's locale format
+                    const currentDate = new Date();
+                    const dateOptions = {{
+                        year: 'numeric',
+                        month: 'numeric',
+                        day: 'numeric'
+                    }};
+                    const dateString = currentDate.toLocaleDateString(navigator.language, dateOptions);
+                    
+                    // Extract symbol and timeframe from symbol string (e.g., "BTCUSDT-30m")
+                    const symbolParts = '{symbol}'.split('-');
+                    const symbolName = symbolParts[0] || 'SYMBOL';
+                    const timeframe = symbolParts.length > 1 ? symbolParts[1].toUpperCase() : '30M';
+                    
+                    // Set multi-line format with localized date
+                    dateElement.textContent = dateString;
+                    symbolTimeElement.textContent = `${{symbolName}} | ${{timeframe}}`;
+                }}
+            }}
+
             // Automatically fit the content to the view after the data is set
             chart.timeScale().fitContent();
+            
+            // Update overlay information
+            updateChartOverlay();
+            
             window.chartReady = true; //This is important to signal playwright that chart actually already drawn
         }})();
     </script>

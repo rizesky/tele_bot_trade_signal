@@ -1,4 +1,5 @@
 import logging
+import logging.handlers
 import signal
 import sys
 import threading
@@ -13,14 +14,23 @@ from risk_manager import RiskManager
 from strategy_executor import StrategyExecutor
 from symbol_manager import SymbolManager
 from trade_manager import TradeManager
+from database import get_database
 
 
 class AppRunner:
 
     def __init__(self):
+        # Initialize database first (if enabled)
+        if config.DB_ENABLE_PERSISTENCE:
+            self.db = get_database()
+            logging.info("Database initialized and ready")
+        else:
+            self.db = None
+            logging.info("Database persistence disabled")
+            
         self.binance_client = BinanceFuturesClient(BINANCE_API_KEY, BINANCE_API_SECRET)
         self.stop_event = threading.Event()
-        self.is_shutting_down = threading.Event() #to prevent doubel shutting down calll
+        self.is_shutting_down = threading.Event() #to prevent double shutting down call
         self.ws = None
         self.symbol_manager = SymbolManager(self.binance_client)
         self.charting_service = ChartingService()
@@ -42,11 +52,62 @@ class AppRunner:
             self.symbol_manager.stop()
         if self.charting_service:
             self.charting_service.stop()
+        if self.db:
+            self.db.close()
         self.stop_event.set()
+
+    def _validate_configuration(self):
+        """Validate critical configuration values before starting the application"""
+        validation_errors = []
+        
+        # Validate API credentials
+        if not BINANCE_API_KEY or not BINANCE_API_SECRET:
+            validation_errors.append("Binance API credentials are missing")
+        
+        # Validate Telegram configuration
+        if not config.TELEGRAM_BOT_TOKEN or not config.TELEGRAM_CHAT_ID:
+            validation_errors.append("Telegram configuration is missing")
+            
+        # Validate symbols configuration
+        # SYMBOLS is optional - if empty, the symbol manager will auto-fetch from Binance
+        # No validation needed here as both empty and populated SYMBOLS are valid
+            
+        # Validate timeframes
+        if not config.TIMEFRAMES:
+            validation_errors.append("No timeframes configured")
+            
+        # Validate numeric configurations
+        if config.HISTORY_CANDLES <= 0:
+            validation_errors.append("HISTORY_CANDLES must be positive")
+            
+        if config.SIGNAL_COOLDOWN < 0:
+            validation_errors.append("SIGNAL_COOLDOWN must be non-negative")
+            
+        if config.DEFAULT_SL_PERCENT <= 0 or config.DEFAULT_SL_PERCENT >= 1:
+            validation_errors.append("DEFAULT_SL_PERCENT must be between 0 and 1")
+            
+        # Validate TP percentages
+        for tp_percent in config.DEFAULT_TP_PERCENTS:
+            if tp_percent <= 0 or tp_percent >= 1:
+                validation_errors.append(f"TP percentage {tp_percent} must be between 0 and 1")
+                
+        # Log validation results
+        if validation_errors:
+            for error in validation_errors:
+                logging.error(f"Configuration error: {error}")
+            return False
+        else:
+            logging.info("Configuration validation passed")
+            return True
 
     def run(self):
         mode = "SIMULATION" if config.SIMULATION_MODE else "LIVE TRADING"
         logging.info(f"Starting in {mode} mode")
+
+        # Validate configuration before starting
+        if not self._validate_configuration():
+            logging.error("Configuration validation failed. Exiting.")
+            return
 
         # Start the SymbolManager worker thread
         self.symbol_manager.start()
@@ -102,16 +163,25 @@ class AppRunner:
 
 
 def setup_logging():
+    # Ensure logs directory exists
+    import os
+    os.makedirs("logs", exist_ok=True)
+    
     logging.basicConfig(
-
-        level=logging.INFO,  # change to debug for development
+        # level=logging.DEBUG,  # change to debug for development
+        level=logging.INFO,  
         format=(
             "%(asctime)s [%(levelname)s] [%(process)d:%(threadName)s] "
             "%(name)s:%(filename)s:%(lineno)d - %(message)s"
         ),
         handlers=[
+            # File logging with rotation
+            logging.handlers.RotatingFileHandler(
+                "logs/trading_bot.log",
+                maxBytes=10*1024*1024,  # 10MB
+                backupCount=5
+            ),
             logging.StreamHandler(sys.stdout),  # console
-            # logging.FileHandler("bot.log")      # file appender optional
         ]
     )
 
@@ -119,9 +189,23 @@ def setup_logging():
 if __name__ == "__main__":
     setup_logging()
     if config.DATA_TESTING:
-        logging.info("Running in DATA_TESTING mode - generating test signals")
-        strategy_runner = StrategyExecutor(None,None,None)
+        logging.info("Running in DATA_TESTING mode - generating test signals with charts")
+        
+        # Initialize required services for chart generation
+        from database import get_database
+        binance_client = BinanceFuturesClient(BINANCE_API_KEY, BINANCE_API_SECRET)
+        charting_service = ChartingService()
+        risk_manager = RiskManager(binance_client)
+        
+        # Start charting service
+        charting_service.start()
+        
+        # Create strategy executor with charting enabled
+        strategy_runner = StrategyExecutor(None, charting_service, risk_manager)
         strategy_runner.run_testing_mode()
+        
+        # Cleanup
+        charting_service.stop()
         logging.info("DATA_TESTING mode completed")
     else:
         app = AppRunner()

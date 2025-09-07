@@ -1,4 +1,12 @@
 .idea/
 .env
+
 .venv/
 charts/
+logs/
+__pycache__/
+
+# Database files
+*.db
+*.db-wal
+*.db-shm

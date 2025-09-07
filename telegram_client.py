@@ -8,7 +8,7 @@ from config import TELEGRAM_SEND_MESSAGE_URL, TELEGRAM_CHAT_ID
 
 
 def format_signal_message(symbol: str, interval: str, entry_prices: list,
-                          signal_details: list, sl_price: float,leverage, margin_type) -> str:
+                          signal_details: list, sl_price: float,leverage, margin_type, risk_guidance=None) -> str:
     """
     Multi-line message.
     """
@@ -30,6 +30,15 @@ def format_signal_message(symbol: str, interval: str, entry_prices: list,
            f"- ⏳ - Signal details :\n{details_str}\n\n"
            f"❌ Stop-Loss : {sl_price:.6f}\n"
            f"🧲 Leverage : {leverage}x [{margin_type}]\n")
+    
+    # Add ATR-based risk guidance if available
+    if risk_guidance:
+        msg += (f"\n📊 Risk Guidance:\n"
+                f"• ATR: {risk_guidance['atr_value']} ({risk_guidance['volatility_level']} volatility)\n"
+                f"• Stop Loss: {risk_guidance['stop_loss_percent']}% from entry\n"
+                f"• Recommended Risk: {risk_guidance['recommended_risk_percent']}% of account\n"
+                f"• Guidance: {risk_guidance['position_guidance']}\n")
+    
     return msg
 
 
