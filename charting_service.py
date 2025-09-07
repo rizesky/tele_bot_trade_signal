@@ -24,7 +24,8 @@ class ChartingService:
         )
         self._is_ready = threading.Event()
         self.chart_queue = asyncio.Queue()  # Use an asyncio queue for communication
-a
+        
+    
     def _run_async_loop(self):
         """Runs the async event loop in a separate thread."""
         asyncio.set_event_loop(self.loop)
