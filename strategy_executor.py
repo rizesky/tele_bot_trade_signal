@@ -10,7 +10,7 @@ from risk_manager import RiskManager
 from strategy import check_signal
 from telegram_client import format_signal_message, send_message_with_retry
 from trade_manager import TradeManager
-from util import create_realistic_test_data
+from util import create_realistic_test_data, timeframe_to_seconds
 from database import get_database
 from util import now_utc
 from structs import ChartData, ChartCallbackData, SignalNotificationData
@@ -187,11 +187,22 @@ class StrategyExecutor:
             else:
                 last_signal_timestamp = self.signal_cooldown.get(key, 0)
             
-            cooldown_seconds = 300 if config.SIMULATION_MODE else config.SIGNAL_COOLDOWN
+            # Apply mode-specific cooldown logic
+            if config.DATA_TESTING:
+                # In data testing, no cooldown for immediate testing
+                cooldown_seconds = 0
+            elif config.SIMULATION_MODE:
+                # In simulation, use fixed cooldown from config
+                cooldown_seconds = config.SIGNAL_COOLDOWN
+            else:
+                # In live trading, use timeframe-based cooldown
+                cooldown_seconds = timeframe_to_seconds(interval)
+            
             time_diff = current_time - last_signal_timestamp
             
             if time_diff < cooldown_seconds:
-                logging.debug(f"On cooldown time for {cooldown_seconds} seconds, time left: {cooldown_seconds - time_diff:.1f} seconds. Ignoring signal")
+                mode = "DATA_TESTING" if config.DATA_TESTING else ("SIMULATION" if config.SIMULATION_MODE else "LIVE")
+                logging.debug(f"On cooldown ({mode} mode): {cooldown_seconds}s total, {cooldown_seconds - time_diff:.1f}s remaining. Ignoring signal for {symbol}-{interval}")
                 return
 
         # Check higher timeframe trend confirmation

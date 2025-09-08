@@ -34,6 +34,45 @@ def now_utc_strftime(format_str: str = "%Y%m%d-%H%M%S") -> str:
     return now_utc().strftime(format_str)
 
 
+def timeframe_to_seconds(timeframe: str) -> int:
+    """
+    Convert timeframe string to seconds.
+    
+    Args:
+        timeframe (str): Timeframe like '15m', '30m', '1h', '4h', '1d'
+        
+    Returns:
+        int: Duration in seconds
+        
+    Examples:
+        timeframe_to_seconds('15m') -> 900
+        timeframe_to_seconds('1h') -> 3600
+        timeframe_to_seconds('4h') -> 14400
+    """
+    timeframe = timeframe.lower().strip()
+    
+    # Extract number and unit
+    if timeframe.endswith('m'):
+        minutes = int(timeframe[:-1])
+        return minutes * 60
+    elif timeframe.endswith('h'):
+        hours = int(timeframe[:-1])
+        return hours * 3600
+    elif timeframe.endswith('d'):
+        days = int(timeframe[:-1])
+        return days * 86400
+    elif timeframe.endswith('w'):
+        weeks = int(timeframe[:-1])
+        return weeks * 604800
+    else:
+        # Fallback: assume it's minutes if no unit
+        try:
+            return int(timeframe) * 60
+        except ValueError:
+            logging.warning(f"Unknown timeframe format: {timeframe}, defaulting to 15 minutes")
+            return 900  # Default to 15 minutes
+
+
 def pd_now_utc() -> pd.Timestamp:
     """
     Get current UTC timestamp as pandas Timestamp.

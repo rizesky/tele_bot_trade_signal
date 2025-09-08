@@ -271,8 +271,8 @@ MAX_CONCURRENT_LOADS=15
 # Historical data per symbol/timeframe
 HISTORY_CANDLES=200
 
-# Signal cooldown (prevents spam)
-SIGNAL_COOLDOWN=600
+# Signal cooldown for simulation mode (live mode uses timeframe-based cooldown)
+SIGNAL_COOLDOWN=300
 ```
 
 ### Symbol Selection & Limiting
@@ -324,7 +324,7 @@ DATA_TESTING=0
 - **Strict signal conditions**: RSI < 40 for BUY, RSI > 60 for SELL
 - **Volume confirmation**: Required for all signals
 - **Market regime filtering**: Signals rejected if inappropriate for market conditions
-- **Signal cooldown**: 10 minutes (600 seconds)
+- **Signal cooldown**: Timeframe-based (15m=15min, 1h=1hour, 4h=4hours)
 - **Higher timeframe confirmation**: Required for signal validation
 
 ### Simulation Mode (Testing)
@@ -358,7 +358,7 @@ DATA_TESTING=1
 | **RSI Thresholds** | Strict (40/60) | Any Level | Test Data |
 | **Volume Check** | Required | Bypassed | Test Data |
 | **Market Regime** | Enforced | Bypassed | N/A |
-| **Signal Cooldown** | 10 minutes | 5 minutes | None |
+| **Signal Cooldown** | Timeframe Duration | 5 minutes | None |
 | **Purpose** | Production | Testing | Development |
 
 ## Signal Quality
