@@ -463,9 +463,6 @@ docker exec trading-bot ls -la trading_bot.db
 
 ### Symbol Configuration
 ```bash
-# ❌ WRONG: Will cause "No symbols found" error
-SYMBOLS=
-
 # ✅ CORRECT: Leave empty for auto-fetch OR specify symbols
 SYMBOLS=                    # Auto-fetch all symbols
 SYMBOLS=BTCUSDT,ETHUSDT    # Specific symbols only
@@ -514,9 +511,12 @@ DB_PATH=/app/data/trading_bot.db    # Absolute path
 # Check symbol configuration
 echo $SYMBOLS
 
-# If empty, ensure API keys work
+# If empty, ensure API keys work and auto-fetch is enabled
 curl -H "X-MBX-APIKEY: $BINANCE_API_KEY" \
      "https://fapi.binance.com/fapi/v1/exchangeInfo"
+
+# Check if MAX_SYMBOLS is too restrictive
+echo $MAX_SYMBOLS
 ```
 
 #### "No Telegram messages" Issue
@@ -615,6 +615,15 @@ The bot uses SQLite with automatic migrations:
 - `signals`: Trading signals with metadata
 - `bot_state`: Persistent configuration
 - `api_cache`: Cached API responses
+
+## Donations
+
+If this project helped you make money or saved you time, consider supporting its development:
+
+- **PayPal**: [Donate via PayPal](https://paypal.me/rizesky)
+- **GitHub Sponsors**: [Sponsor on GitHub](https://github.com/sponsors/rizesky)
+
+Every donation helps keep this project maintained and improved! 🙏
 
 ## License
 
