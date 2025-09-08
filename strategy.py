@@ -326,7 +326,7 @@ def check_signal(df):
             volume_ratio = current_vol / avg_vol if avg_vol > 0 else 0
         except (IndexError, ValueError, TypeError, ZeroDivisionError):
             volume_ratio = 0
-        logging.info(
+        logging.debug(
             f"{signal} Signal detected: Price crossed MA ({prev_price:.2f}->{last_price:.2f} over/under {prev_ma:.2f}->{last_ma:.2f}), "
             f"RSI is {last_rsi:.2f}, Volume ratio: {volume_ratio:.2f}x, Market regime: {market_regime}")
 

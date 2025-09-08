@@ -1,7 +1,8 @@
 import logging
 
 import pandas as pd
-from binance import Client, BinanceAPIException, BinanceRequestException
+from binance.client import Client
+from binance.exceptions import BinanceAPIException, BinanceRequestException
 
 
 class BinanceFuturesClient:
@@ -34,6 +35,70 @@ class BinanceFuturesClient:
             return []
         except Exception as e:
             logging.error(f"An unexpected error occurred: {e}")
+            return []
+
+    def get_futures_symbols_with_stats(self) -> list[dict]:
+        """
+        Retrieves futures symbols with volume and quality metrics for intelligent selection.
+        
+        Returns:
+            list[dict]: List of symbol data with volume, price change, and other metrics.
+                       Sorted by quality score (volume * price_change_abs * market_activity).
+        """
+        try:
+            # Get 24h ticker statistics for all futures symbols
+            ticker_stats = self.client.futures_ticker()
+            
+            # Filter for USDT pairs and calculate quality scores
+            symbol_data = []
+            for ticker in ticker_stats:
+                symbol = ticker['symbol']
+                
+                # Only include USDT pairs (most liquid and relevant)
+                if not symbol.endswith('USDT'):
+                    continue
+                    
+                try:
+                    volume_24h = float(ticker['quoteVolume'])  # 24h volume in USDT
+                    price_change_percent = abs(float(ticker['priceChangePercent']))  # Absolute price change
+                    count_trades = int(ticker['count'])  # Number of trades
+                    
+                    # Skip symbols with very low activity
+                    if volume_24h < 100000:  # Less than $100k daily volume
+                        continue
+                    
+                    # Calculate quality score (higher = better for trading)
+                    # Factors: Volume (liquidity), Price movement (volatility), Trade count (activity)
+                    quality_score = (
+                        (volume_24h / 1000000) * 0.6 +  # Volume weight (60%)
+                        (price_change_percent) * 0.3 +   # Volatility weight (30%)
+                        (count_trades / 10000) * 0.1     # Activity weight (10%)
+                    )
+                    
+                    symbol_data.append({
+                        'symbol': symbol,
+                        'volume_24h_usdt': volume_24h,
+                        'price_change_percent': price_change_percent,
+                        'trade_count': count_trades,
+                        'quality_score': quality_score,
+                        'current_price': float(ticker['lastPrice'])
+                    })
+                    
+                except (ValueError, KeyError) as e:
+                    logging.debug(f"Skipping {symbol} due to data parsing error: {e}")
+                    continue
+            
+            # Sort by quality score (descending - best symbols first)
+            symbol_data.sort(key=lambda x: x['quality_score'], reverse=True)
+            
+            logging.info(f"Retrieved {len(symbol_data)} quality futures symbols with stats")
+            return symbol_data
+            
+        except (BinanceAPIException, BinanceRequestException) as e:
+            logging.error(f"Error fetching futures symbols with stats: {e}")
+            return []
+        except Exception as e:
+            logging.error(f"An unexpected error occurred fetching symbol stats: {e}")
             return []
 
     def load_historical_data(self, symbol, interval, limit=100):

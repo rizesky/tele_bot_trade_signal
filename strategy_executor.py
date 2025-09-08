@@ -1,5 +1,7 @@
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
+import threading
 
 import config
 from charting_service import ChartingService
@@ -24,6 +26,13 @@ class StrategyExecutor:
         
         # Database integration for signal storage
         self.db = get_database() if config.DB_ENABLE_PERSISTENCE else None
+        
+        # Thread pool for non-blocking signal processing
+        self.signal_executor = ThreadPoolExecutor(
+            max_workers=4,  # Limit concurrent signal processing
+            thread_name_prefix="SignalProcessor"
+        )
+        self.processing_lock = threading.Lock()  # Protect signal cooldown dict
 
     def handle_kline(self, k):
         """Callback for new kline data from the WebSocket with input validation."""
@@ -35,12 +44,12 @@ class StrategyExecutor:
         symbol = k["s"]
         interval = k["i"]
 
-        # Update kline data in the trade manager
+        # Update kline data in the trade manager (this must be synchronous)
         self.trade_manager.update_kline_data(k)
-        df = self.trade_manager.get_kline_data(symbol, interval)
-
-        # Process signals with the updated data
-        self.process_signals(symbol, interval, df)
+        
+        # Submit signal processing to thread pool for non-blocking execution
+        # This prevents the WebSocket callback from being blocked by signal processing
+        self.signal_executor.submit(self._async_process_signals, symbol, interval)
 
     def _validate_kline_input(self, k):
         """Basic validation of kline data structure before processing"""
@@ -76,34 +85,40 @@ class StrategyExecutor:
 
     def handle_chart_callback(self, callback_data: ChartCallbackData):
         """Handles the result from the chart plotting task with proper error handling."""
-        if callback_data.error:
-            logging.error(f"Chart generation failed for {callback_data.symbol}-{callback_data.interval}: {callback_data.error}")
-            # Send signal notification without chart as fallback
-            logging.info(f"Sending signal notification without chart for {callback_data.symbol}-{callback_data.interval}")
-            notif_data = SignalNotificationData(
-                symbol=callback_data.symbol, interval=callback_data.interval,
-                entry_prices=callback_data.entry_prices, tp_list=callback_data.tp_list,
-                sl=callback_data.sl, chart_path=None, signal_info=callback_data.signal_info,
-                leverage=callback_data.leverage, margin_type=callback_data.margin_type, risk_guidance=None
-            )
-            self._send_signal_notif(notif_data)
-        else:
-            # Validate chart file exists and is readable
-            chart_path = callback_data.chart_path
-            if chart_path and not self._validate_chart_file(chart_path):
-                logging.warning(f"Chart file validation failed for {callback_data.symbol}-{callback_data.interval}, sending without chart")
-                chart_path = None
-                
-            notif_data = SignalNotificationData(
-                symbol=callback_data.symbol, interval=callback_data.interval,
-                entry_prices=callback_data.entry_prices, tp_list=callback_data.tp_list,
-                sl=callback_data.sl, chart_path=chart_path, signal_info=callback_data.signal_info,
-                leverage=callback_data.leverage, margin_type=callback_data.margin_type, risk_guidance=None
-            )
-            self._send_signal_notif(notif_data)
-        
-        # Always update cooldown to prevent spam
-        self.signal_cooldown[(callback_data.symbol, callback_data.interval)] = time.time()
+        try:
+            if callback_data.error:
+                logging.error(f"Chart generation failed for {callback_data.symbol}-{callback_data.interval}: {callback_data.error}")
+                # Send signal notification without chart as fallback
+                logging.info(f"Sending signal notification without chart for {callback_data.symbol}-{callback_data.interval}")
+                notif_data = SignalNotificationData(
+                    symbol=callback_data.symbol, interval=callback_data.interval,
+                    entry_prices=callback_data.entry_prices, tp_list=callback_data.tp_list,
+                    sl=callback_data.sl, chart_path=None, signal_info=callback_data.signal_info,
+                    leverage=callback_data.leverage, margin_type=callback_data.margin_type, risk_guidance=None
+                )
+                self._send_signal_notif(notif_data)
+            else:
+                # Validate chart file exists and is readable
+                chart_path = callback_data.chart_path
+                if chart_path and not self._validate_chart_file(chart_path):
+                    logging.warning(f"Chart file validation failed for {callback_data.symbol}-{callback_data.interval}, sending without chart")
+                    chart_path = None
+                    
+                notif_data = SignalNotificationData(
+                    symbol=callback_data.symbol, interval=callback_data.interval,
+                    entry_prices=callback_data.entry_prices, tp_list=callback_data.tp_list,
+                    sl=callback_data.sl, chart_path=chart_path, signal_info=callback_data.signal_info,
+                    leverage=callback_data.leverage, margin_type=callback_data.margin_type, risk_guidance=None
+                )
+                self._send_signal_notif(notif_data)
+            
+            # Always update cooldown to prevent spam (thread-safe)
+            with self.processing_lock:
+                self.signal_cooldown[(callback_data.symbol, callback_data.interval)] = time.time()
+            
+        finally:
+            # Explicit cleanup of callback data references to free memory
+            callback_data = None
 
     def _validate_chart_file(self, chart_path):
         """Validate that the chart file exists and is readable"""
@@ -128,6 +143,16 @@ class StrategyExecutor:
             logging.warning(f"Error validating chart file {chart_path}: {e}")
             return False
 
+    def _async_process_signals(self, symbol, interval):
+        """Async wrapper for signal processing that gets the data and processes it."""
+        try:
+            # Get the current data from trade manager
+            df = self.trade_manager.get_kline_data(symbol, interval)
+            # Process the signals
+            self.process_signals(symbol, interval, df)
+        except Exception as e:
+            logging.error(f"Error in async signal processing for {symbol}-{interval}: {e}")
+
     def process_signals(self, symbol, interval, df):
         """Process signals based on available data with higher timeframe confirmation."""
         min_candles_needed = 20 if config.SIMULATION_MODE or config.DATA_TESTING else 50
@@ -151,22 +176,23 @@ class StrategyExecutor:
         key = (symbol, interval)
         current_time = time.time()
         
-        # Check cooldown
-        if self.db:
-            last_signal_time_db = self.db.get_last_signal_time(symbol, interval)
-            if last_signal_time_db:
-                last_signal_timestamp = last_signal_time_db.timestamp()
+        # Check cooldown with thread safety
+        with self.processing_lock:
+            if self.db:
+                last_signal_time_db = self.db.get_last_signal_time(symbol, interval)
+                if last_signal_time_db:
+                    last_signal_timestamp = last_signal_time_db.timestamp()
+                else:
+                    last_signal_timestamp = 0
             else:
-                last_signal_timestamp = 0
-        else:
-            last_signal_timestamp = self.signal_cooldown.get(key, 0)
-        
-        cooldown_seconds = 300 if config.SIMULATION_MODE else config.SIGNAL_COOLDOWN
-        time_diff = current_time - last_signal_timestamp
-        
-        if time_diff < cooldown_seconds:
-            logging.debug(f"On cooldown time for {cooldown_seconds} seconds, time left: {cooldown_seconds - time_diff:.1f} seconds. Ignoring signal")
-            return
+                last_signal_timestamp = self.signal_cooldown.get(key, 0)
+            
+            cooldown_seconds = 300 if config.SIMULATION_MODE else config.SIGNAL_COOLDOWN
+            time_diff = current_time - last_signal_timestamp
+            
+            if time_diff < cooldown_seconds:
+                logging.debug(f"On cooldown time for {cooldown_seconds} seconds, time left: {cooldown_seconds - time_diff:.1f} seconds. Ignoring signal")
+                return
 
         # Check higher timeframe trend confirmation
         if not self._check_higher_timeframe_trend(symbol, interval):
@@ -180,7 +206,6 @@ class StrategyExecutor:
             except (IndexError, ValueError, TypeError):
                 logging.warning(f"Error getting last price for {symbol}-{interval}")
                 return
-            # --- Fetch leverage and margin type ---
             leverage, margin_type = self.risk_manager.get_configured_leverage_and_margin_type(symbol)
             entry_prices, tp_list, sl, risk_guidance = self._generate_trade_parameters(signal_info, last_price, df)
 
@@ -191,10 +216,12 @@ class StrategyExecutor:
                 # Validate that we have enough clean data for charting
                 if len(clean_df) < min_candles_needed:
                     logging.warning(f"Not enough clean data for charting {symbol}-{interval}: {len(clean_df)} < {min_candles_needed}")
+                    # Clean up DataFrame references
+                    del clean_df
                     return
                 
                 chart_data = ChartData(
-                    ohlc_df=clean_df,  # Use clean data instead of raw data
+                    ohlc_df=clean_df,
                     symbol=symbol,
                     timeframe=interval,
                     tp_levels=tp_list,
@@ -208,7 +235,14 @@ class StrategyExecutor:
                     )
                 )
                 self.charting_service.submit_plot_chart_task(chart_data)
-                self.signal_cooldown[key] = current_time
+                
+                with self.processing_lock:
+                    self.signal_cooldown[key] = current_time
+                
+                # Explicit cleanup of large DataFrame references
+                del clean_df
+                if 'df' in locals() and len(df) > 1000:
+                    logging.debug(f"Cleaned up large DataFrame references for {symbol}-{interval} ({len(df)} rows)")
 
     def _check_higher_timeframe_trend(self, symbol, interval):
         """
@@ -296,7 +330,7 @@ class StrategyExecutor:
                     atr = compute_atr(df)
                     if atr > 0:
                         risk_guidance = calculate_risk_guidance(atr, last_price)
-                        logging.info(f"ATR Risk Guidance for BUY: {risk_guidance['position_guidance']}")
+                        logging.debug(f"ATR Risk Guidance for BUY: {risk_guidance['position_guidance']}")
                 except Exception as e:
                     logging.warning(f"Error calculating ATR-based risk guidance: {e}")
             
@@ -317,7 +351,7 @@ class StrategyExecutor:
                     atr = compute_atr(df)
                     if atr > 0:
                         risk_guidance = calculate_risk_guidance(atr, last_price)
-                        logging.info(f"ATR Risk Guidance for SELL: {risk_guidance['position_guidance']}")
+                        logging.debug(f"ATR Risk Guidance for SELL: {risk_guidance['position_guidance']}")
                 except Exception as e:
                     logging.warning(f"Error calculating ATR-based risk guidance: {e}")
             
@@ -358,10 +392,11 @@ class StrategyExecutor:
 
     def run_testing_mode(self):
         """Generates immediate test signals for DATA_TESTING mode."""
-        if config.SYMBOLS is None:
-            logging.error("No symbols found in config")
-            return
-        for symbol in config.SYMBOLS:
+        # Use default test symbols if none configured
+        test_symbols = config.SYMBOLS if config.SYMBOLS else ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
+        logging.info(f"Running test mode with symbols: {test_symbols}")
+        
+        for symbol in test_symbols:
             for interval in config.TIMEFRAMES:
                 try:
                     df = create_realistic_test_data(periods=50, base_price=30000)
@@ -397,3 +432,18 @@ class StrategyExecutor:
                         time.sleep(1)
                 except Exception as e:
                     logging.error(f"Error in testing mode for {symbol} {interval}: {e}")
+    
+    def shutdown(self):
+        """Gracefully shutdown the strategy executor and its thread pool."""
+        logging.info("Shutting down StrategyExecutor...")
+        try:
+            # Shutdown the signal processing thread pool
+            self.signal_executor.shutdown(wait=True)
+            logging.info("Signal processing thread pool shut down successfully")
+        except Exception as e:
+            logging.error(f"Error shutting down signal processing thread pool: {e}")
+            # Force shutdown if graceful shutdown fails
+            try:
+                self.signal_executor.shutdown(wait=False)
+            except Exception as force_e:
+                logging.error(f"Error during force shutdown: {force_e}")

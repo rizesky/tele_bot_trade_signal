@@ -107,7 +107,6 @@ class RiskManager:
         Returns:
             tuple[int, str]: A tuple containing (leverage, marginType), with fallback defaults.
         """
-        # 1. Check database cache first (persistent across restarts)
         if self.db:
             cached_info = self.db.get_cached_position_info(symbol, max_age_hours=1)
             if cached_info:

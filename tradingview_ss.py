@@ -66,7 +66,7 @@ class TradingViewChart:
         # --- Pre-processing Step: Filter and Sort Data ---
 
         # 1. Remove duplicates by time (if any exist)
-        # A dictionary is a good way to get unique items
+        
         unique_ohlc = {d['time']: d for d in chart_data.ohlc_data}.values()
 
         # 2. Sort the data by time in ascending order
@@ -131,7 +131,9 @@ class TradingViewChart:
         if not output_path:
             raise ValueError("output_path cannot be empty")
 
-        page=None
+        page = None
+        page_closed = False
+        
         try:
             ohlc_data, rsi_data, ma_data = self.prepare_data(ss_df)
             if not ohlc_data:
@@ -175,33 +177,37 @@ class TradingViewChart:
                         }
                     """)
 
-            logging.info(f"Canvas info: {canvas_info}")
+            logging.debug(f"Canvas info: {canvas_info}")
 
             if not canvas_info.get('hasContent', False):
                 raise Exception("Chart canvas has no content")
 
-
             container = page.locator(".container")
             await container.screenshot(path=output_path)
+            
+            # Close page here on successful completion
             await page.close()
+            page_closed = True
             return output_path
-
 
         except Exception as e:
             logging.error(f"Chart rendering failed: {e}")
             # Debug information
-            if page is not None:
-                page_content = await page.content()
-                logging.debug(f"Page content length: {len(page_content)}")
-                # Check if external resources loaded
+            if page is not None and not page_closed:
                 try:
+                    page_content = await page.content()
+                    logging.debug(f"Page content length: {len(page_content)}")
+                    # Check if external resources loaded
                     js_loaded = await page.evaluate("typeof window.LightweightCharts !== 'undefined'")
                     logging.info(f"TradingView JS loaded: {js_loaded}")
-                except Exception as e:
-                    raise e
+                except Exception as debug_e:
+                    logging.debug(f"Error during debug info collection: {debug_e}")
             raise e
 
-
         finally:
-
-            await page.close()
+            # Only close if not already closed and page exists
+            if page is not None and not page_closed:
+                try:
+                    await page.close()
+                except Exception as close_e:
+                    logging.debug(f"Error closing page in finally block: {close_e}")

@@ -64,6 +64,7 @@
             font-weight: 600;
             color: #1f2937;
         }}
+
     </style>
 </head>
 <body>
@@ -102,15 +103,22 @@
                 layout: {{
                     background: {{ color: '#ffffff' }},
                     textColor: '#1F2937',
+                    // Official TradingView attribution logo
+                    attributionLogo: true,
                 }},
                 grid: {{
                     vertLines: {{ color: '#E5E7EB' }},
                     horzLines: {{ color: '#E5E7EB' }},
                 }},
-                // Define the main price scale
+                // Define the main price scale with automatic fitting
                 rightPriceScale: {{
                     borderColor: '#D1D5DB',
                     visible: true,
+                    autoScale: true,           // Enable automatic price scaling
+                    scaleMargins: {{           // Add margins for better visibility
+                        top: 0.1,              // 10% margin at top
+                        bottom: 0.1,           // 10% margin at bottom
+                    }},
                 }},
                 
                 leftPriceScale: {{
@@ -118,22 +126,26 @@
                 }},
                 timeScale: {{
                     borderColor: '#D1D5DB',
-                    timeVisible: false,    // Hide time labels for cleaner look
-                    secondsVisible: false,
-                    visible: false,        // Hide entire time scale
+                    timeVisible: true,     // Show time labels
+                    secondsVisible: false, // Hide seconds for cleaner look
+                    visible: true,         // Show time scale
+                    // Remove custom formatter to use default spacing and localization
                 }},
-                // Disable all user interactions to make the chart static
-                handleScroll: false,
-                //handleScale: false,
+                // Enable interactions for better rendering
+                handleScroll: true,
+                handleScale: true,
             }});
 
-            // Add the candlestick series to the chart
+            // Add the candlestick series to the chart with better visibility
             const candlestickSeries = chart.addSeries(LightweightCharts.CandlestickSeries, {{
-                upColor: '#22c55e',
-                downColor: '#ef4444',
-                borderVisible: false,
-                wickUpColor: '#22c55e',
-                wickDownColor: '#ef4444',
+                upColor: '#22c55e',           // Green for bullish candles
+                downColor: '#ef4444',         // Red for bearish candles  
+                borderVisible: true,          // Show borders for better definition
+                borderUpColor: '#22c55e',     // Green borders for bullish
+                borderDownColor: '#ef4444',   // Red borders for bearish
+                wickUpColor: '#22c55e',       // Green wicks for bullish
+                wickDownColor: '#ef4444',     // Red wicks for bearish
+                priceScaleId: 'right',        // Use right price scale
             }});
             candlestickSeries.setData(chartData);
 
@@ -150,14 +162,14 @@
                 const startTime = chartData[0].time;
                 const endTime = chartData[chartData.length - 1].time;
 
-                // Add TP levels as full-width horizontal lines
+                // Add TP levels as full-width horizontal lines (TP1, TP2, TP3, TP4)
                 if (tpLevels && tpLevels.length > 0) {{
                     tpLevels.forEach((level, i) => {{
                         const tpSeries = chart.addSeries(LightweightCharts.LineSeries, {{
                             color: colors[i % colors.length],
                             lineWidth: 8,
                             lineStyle: LightweightCharts.LineStyle.Solid,
-                            title: `TP${{i + 1}}`,
+                            title: `TP${{i + 1}}`,  // TP1, TP2, TP3, TP4 (standard convention)
                             priceScaleId: 'right'
                         }});
                         tpSeries.setData([
@@ -209,8 +221,20 @@
                 }}
             }}
 
-            // Automatically fit the content to the view after the data is set
+            // Automatically fit the content and scale properly
             chart.timeScale().fitContent();
+            
+            // Ensure proper price scaling after data is loaded
+            setTimeout(() => {{
+                chart.priceScale('right').applyOptions({{
+                    autoScale: true,
+                    scaleMargins: {{
+                        top: 0.1,
+                        bottom: 0.1,
+                    }},
+                }});
+                chart.timeScale().fitContent();
+            }}, 100);
             
             // Update overlay information
             updateChartOverlay();

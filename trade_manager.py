@@ -203,7 +203,7 @@ class TradeManager:
             self.loading_queue.discard(key)
 
     def update_kline_data(self, k):
-        """Updates the kline data from a WebSocket message with thread safety."""
+        """Updates the kline data from a WebSocket message with thread safety and optimized operations."""
         symbol, interval = k["s"], k["i"]
         key = (symbol, interval)
         ts = pd.to_datetime(k["t"], unit="ms")
@@ -213,42 +213,44 @@ class TradeManager:
             if key not in self.klines:
                 self.klines[key] = pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
 
-            new_row = pd.DataFrame([{
+            # Extract values once to avoid repeated dict lookups
+            new_data = {
                 'open': float(k["o"]),
                 'high': float(k["h"]),
                 'low': float(k["l"]),
                 'close': float(k["c"]),
                 'volume': float(k["v"])
-            }], index=[ts])
+            }
 
             # Check if this timestamp already exists to prevent duplicates
             if ts in self.klines[key].index:
-                # Update existing row instead of adding duplicate
-                for col in ['open', 'high', 'low', 'close', 'volume']:
-                    try:
-                        # Ensure we're assigning a Python float, not numpy.float64
-                        value = float(new_row.iloc[0][col])
+                # Update existing row directly without creating new DataFrame
+                try:
+                    for col, value in new_data.items():
                         self.klines[key].loc[ts, col] = value
-                    except Exception as e:
-                        logging.error(f"Error updating {symbol}-{interval} {col} at {ts}: {e}")
-                        logging.error(f"DataFrame type: {type(self.klines[key])}")
-                        logging.error(f"new_row type: {type(new_row)}, new_row.iloc[0] type: {type(new_row.iloc[0])}")
-                        # Recreate DataFrame if corrupted
-                        self.klines[key] = pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
-                        break
+                except Exception as e:
+                    logging.error(f"Error updating {symbol}-{interval} at {ts}: {e}")
+                    # Recreate DataFrame if corrupted
+                    self.klines[key] = pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
             else:
-                # Add new row and sort by timestamp
+                # Add new row efficiently
                 if self.klines[key].empty:
-                    # If DataFrame is empty, just assign the new row
-                    self.klines[key] = new_row.copy()
+                    self.klines[key] = pd.DataFrame([new_data], index=[ts])
                 else:
-                    # Concatenate with existing data
-                    self.klines[key] = pd.concat([self.klines[key], new_row], ignore_index=False)
-                    self.klines[key].sort_index(inplace=True)
+                    # Use loc to add new row directly without concatenation
+                    self.klines[key].loc[ts] = new_data
+                    
+                    # Only sort if the new timestamp is not at the end (most common case)
+                    if len(self.klines[key]) > 1 and ts < self.klines[key].index[-2]:
+                        self.klines[key].sort_index(inplace=True)
             
             # Keep only the most recent candles to prevent memory bloat
-            if len(self.klines[key]) > config.HISTORY_CANDLES:
-                self.klines[key] = self.klines[key].iloc[-config.HISTORY_CANDLES:]
+            # Use more efficient slicing instead of iloc
+            df_len = len(self.klines[key])
+            if df_len > config.HISTORY_CANDLES:
+                excess_rows = df_len - config.HISTORY_CANDLES
+                # Drop oldest rows more efficiently
+                self.klines[key] = self.klines[key].iloc[excess_rows:]
             
             # Final safety check: ensure we still have a valid DataFrame
             if not isinstance(self.klines[key], pd.DataFrame):
