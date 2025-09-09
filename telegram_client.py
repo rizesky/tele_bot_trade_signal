@@ -101,18 +101,41 @@ def send_message_with_retry(msg:str, chart_path=None, max_retries=3):
     for attempt in range(max_retries):
         try:
             if chart_path and os.path.exists(chart_path):
-                send_message(msg, chart_path)
+                result = send_message(msg, chart_path)
             else:
-                send_message(msg)  # Send without image
-            logging.info(f"Message sent successfully on attempt {attempt + 1}")
-            break
+                result = send_message(msg)  # Send without image
+            
+            # Only log success if we actually got a valid response
+            if result is not None:
+                logging.info(f"Message sent successfully on attempt {attempt + 1}")
+                break
+            else:
+                logging.error(f"Attempt {attempt + 1} failed: send_message returned None")
+                if attempt == max_retries - 1:
+                    # Last attempt, send without image
+                    try:
+                        result = send_message(msg)
+                        if result is not None:
+                            logging.warning("Sent message without image as fallback")
+                            break
+                        else:
+                            logging.error("Final fallback also failed: send_message returned None")
+                    except Exception as e2:
+                        logging.error(f"Final fallback also failed: {e2}")
+                else:
+                    import time
+                    time.sleep(1)  # Wait before retry
         except Exception as e:
             logging.error(f"Attempt {attempt + 1} failed: {e}")
             if attempt == max_retries - 1:
                 # Last attempt, send without image
                 try:
-                    send_message(msg)
-                    logging.warn("Sent message without image as fallback")
+                    result = send_message(msg)
+                    if result is not None:
+                        logging.warning("Sent message without image as fallback")
+                        break
+                    else:
+                        logging.error("Final fallback also failed: send_message returned None")
                 except Exception as e2:
                     logging.error(f"Final fallback also failed: {e2}")
             else:

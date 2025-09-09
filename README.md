@@ -1,59 +1,113 @@
-# Trading Signal Bot
+# Advanced Trading Signal Bot
 
-Cryptocurrency trading signal bot for Binance Futures with technical analysis, risk management, and automated chart generation.
+A sophisticated cryptocurrency trading signal bot for Binance Futures with advanced technical analysis, intelligent risk management, automated chart generation, and comprehensive rate limiting protection.
 
-## Features
+## **Key Features**
 
-### Signal Generation
-- Multi-timeframe analysis (15m, 30m, 1h, 4h)
-- RSI + Moving Average crossover with volume confirmation
-- Higher timeframe trend confirmation
-- Market regime detection (trending, ranging, volatile)
-- Trading session filtering (9 AM - 9 PM UTC)
+### **Advanced Signal Generation**
+- **Multi-timeframe analysis** (15m, 30m, 1h, 4h) with higher timeframe confirmation
+- **RSI + Moving Average crossover** with volume confirmation
+- **Market regime detection** (trending, ranging, volatile) with adaptive filtering
+- **Trading session filtering** (9 AM - 9 PM UTC) for optimal liquidity
+- **ATR-based position sizing** with risk guidance
+- **Multiple take profit levels** (1.5%, 3%, 5%, 8%)
 
-### Risk Management
-- ATR-based position sizing
-- Market cap filtering via CoinGecko API
-- Leverage and margin type management
-- Configurable signal cooldown
-- Multiple take profit levels
+### **Intelligent Risk Management**
+- **Market cap filtering** via CoinGecko API integration
+- **Leverage and margin type management** with Binance API integration
+- **Configurable signal cooldown** with timeframe-based logic
+- **Quality-based symbol selection** with volume and volatility scoring
+- **Real-time risk assessment** with ATR calculations
 
-### Technical Features
-- Real-time WebSocket data from Binance
-- TradingView-style chart generation
-- SQLite database with automatic cleanup
-- Docker containerization
-- Thread-safe multi-processing
-- Automatic error recovery
+### **Production-Ready Architecture**
+- **Real-time WebSocket data** from Binance with automatic reconnection
+- **TradingView-style chart generation** with Playwright automation
+- **SQLite database** with automatic cleanup and optimization
+- **Docker containerization** with multi-stage builds
+- **Thread-safe multi-processing** with connection pooling
+- **Comprehensive error recovery** and graceful shutdown
 
-## Key Concepts & Architecture
+### **Advanced Rate Limiting System**
+- **Weight-based API limiting** following Binance's exact specifications
+- **Real-time usage monitoring** with automatic queuing
+- **Safety margins** to prevent API bans (configurable 10% default)
+- **Request optimization** to minimize weight usage
+- **Concurrent request handling** with thread-safe operations
+- **Detailed logging** and usage statistics
 
-### Lazy Loading System
+**For detailed rate limiting configuration and troubleshooting, see [RATE_LIMITING_GUIDE.md](RATE_LIMITING_GUIDE.md)**
 
-The bot uses intelligent **lazy loading** for historical data to optimize performance and API usage:
+## **Rate Limiting Protection**
 
-#### How It Works
+### **Binance API Weight System**
+The bot implements Binance's exact weight calculation system:
+
+| Limit Range | Weight Cost | Use Case |
+|-------------|-------------|----------|
+| 1 ≤ limit < 100 | 1 weight | Small requests, real-time updates |
+| 100 ≤ limit < 500 | 2 weight | Medium historical data |
+| 500 ≤ limit ≤ 1000 | 5 weight | Large historical data |
+| 1000 < limit ≤ 1500 | 10 weight | Maximum single request |
+
+### **Rate Limiting Features**
+- **Automatic weight calculation** for all API requests
+- **Sliding window tracking** (1-minute intervals)
+- **Safety margin enforcement** (10% default, configurable)
+- **Request queuing** when approaching limits
+- **Real-time monitoring** with detailed statistics
+- **Error detection** for rate limit violations (HTTP 429, 418)
+
+### **Configuration**
+```bash
+# Enable rate limiting (HIGHLY RECOMMENDED)
+RATE_LIMITING_ENABLED=1
+
+# Safety margin (10% = use only 90% of limits)
+RATE_LIMIT_SAFETY_MARGIN=0.1
+
+# Warning threshold (80% = warn when usage exceeds 80%)
+RATE_LIMIT_WARNING_THRESHOLD=0.8
+
+# Binance standard limits
+RATE_LIMIT_MAX_WEIGHT_PER_MINUTE=1200
+RATE_LIMIT_MAX_REQUESTS_PER_MINUTE=1200
+
+# Retry and logging settings
+RATE_LIMIT_RETRY_DELAY=1.0
+RATE_LIMIT_MAX_RETRIES=3
+RATE_LIMIT_DETAILED_LOGGING=1
+```
+
+## **Advanced Architecture**
+
+### **Lazy Loading System**
+
+The bot uses intelligent **lazy loading** for optimal performance and API efficiency:
+
+#### **How It Works**
 ```
 Signal #1 for BTCUSDT-15m:
-├── Load 200 historical candles (API call)
-├── Store in memory + real-time updates
-└── Mark as loaded
+├── Check: Historical data loaded? ❌ NO
+├── Load: 200 historical candles (API call, weight=2)
+├── Store: In memory + database cache
+└── Mark: As loaded for future use
 
 Signal #2 for BTCUSDT-15m (same symbol):
-├── Check: Already loaded? ✅ YES
+├── Check: Historical data loaded? ✅ YES
 ├── Action: REUSE existing data (no API call)
-└── Use: Cached data + live updates
+└── Use: Cached data + live WebSocket updates
 ```
 
-#### Benefits
+#### **Benefits**
 - **API Efficiency**: Historical data loaded only ONCE per symbol/timeframe
 - **Memory Optimized**: Maintains exactly 200 candles per symbol (sliding window)
 - **Fast Response**: Subsequent signals use cached data instantly
 - **Scalable**: Works efficiently with 300+ symbols
+- **Rate Limit Friendly**: Dramatically reduces API usage
 
-#### Configuration
+#### **Configuration**
 ```bash
-# Enable/disable lazy loading (recommended: enabled)
+# Enable lazy loading (recommended: enabled)
 LAZY_LOADING_ENABLED=1
 
 # Maximum symbols to load historical data for
@@ -63,90 +117,11 @@ MAX_LAZY_LOAD_SYMBOLS=100
 MAX_CONCURRENT_LOADS=15
 ```
 
-#### Impact of Disabling
-```bash
-LAZY_LOADING_ENABLED=0  # ⚠️ Not recommended
-```
-**Consequences:**
-- 📈 **Memory**: 5-10x higher usage (all symbols loaded upfront)
-- 🌐 **API Calls**: 300+ requests at startup (rate limiting risk)
-- ⏱️ **Startup Time**: 5-15 minutes vs 30 seconds
-- 💰 **API Costs**: Higher usage, potential rate limit penalties
+### **Intelligent Symbol Selection**
 
-### Market Regime Detection
+Advanced symbol selection system for production optimization:
 
-The bot automatically detects and adapts to different market conditions:
-
-#### Market Regimes
-```python
-TRENDING    # Strong directional movement (signals encouraged)
-RANGING     # Sideways price action (signals discouraged) 
-VOLATILE    # High volatility/noise (signals filtered)
-UNCLEAR     # Insufficient data (signals cautious)
-```
-
-#### How It Works
-- **Price action analysis**: Detects breakouts, ranges, and volatility
-- **Adaptive filtering**: Rejects inappropriate signals for current regime
-- **Risk adjustment**: Modifies signal confidence based on market state
-
-#### Configuration Impact
-```bash
-# Live Trading Mode
-Market regime filtering: ENABLED    # Strict regime-appropriate signals
-
-# Simulation Mode  
-Market regime filtering: DISABLED   # All signals allowed for testing
-```
-
-### Higher Timeframe Confirmation
-
-Multi-timeframe analysis prevents false signals:
-
-#### Confirmation Logic
-```
-15m signal → Check 30m trend → Check 1h trend → Check 4h trend
-    ↓              ↓              ↓              ↓
-If all higher timeframes align → CONFIRM signal
-If higher timeframes conflict → REJECT signal
-```
-
-#### Benefits
-- **Reduced false positives**: Filters out counter-trend noise
-- **Better entries**: Signals align with broader market direction
-- **Risk reduction**: Prevents trading against major trends
-
-### Trading Session Filtering
-
-Signals are filtered by trading session to avoid low-liquidity periods:
-
-#### Active Hours
-```bash
-Active Trading: 09:00 - 21:00 UTC (12 hours)
-Quiet Hours:    21:00 - 09:00 UTC (12 hours)
-```
-
-#### Logic
-- **High liquidity**: Signals allowed during active session
-- **Low liquidity**: Signals suppressed during quiet hours
-- **Rationale**: Better fills and reduced slippage during active hours
-
-### Intelligent Symbol Selection
-
-The bot features an advanced symbol selection system for production optimization:
-
-#### How Symbol Selection Works
-```
-When MAX_SYMBOLS is set:
-├── Fetch all available futures symbols from Binance
-├── Get 24h volume/volatility statistics for each symbol
-├── Apply quality scoring algorithm
-├── Filter by volume and market cap requirements
-├── Select top N symbols based on strategy
-└── Use selected symbols for trading
-```
-
-#### Selection Strategies
+#### **Selection Strategies**
 
 **Quality Strategy (Recommended)**
 ```python
@@ -167,7 +142,7 @@ quality_score = (
 - Useful for testing and avoiding bias
 - Not recommended for production
 
-#### Multi-Layer Filtering
+#### **Multi-Layer Filtering**
 ```
 All Binance Futures Symbols (300+)
     ↓ USDT Pairs Only
@@ -178,72 +153,100 @@ All Binance Futures Symbols (300+)
 Final Symbol Set (50-200 symbols)
 ```
 
-#### Configuration Examples
+### **Market Regime Detection**
 
-**Conservative Production**
-```bash
-MAX_SYMBOLS=50
-SYMBOL_SELECTION_STRATEGY=quality
-MIN_DAILY_VOLUME_USDT=5000000      # $5M minimum
-MIN_MARKET_CAP_USD=1000000000      # $1B minimum
+The bot automatically detects and adapts to different market conditions:
+
+#### **Market Regimes**
+```python
+TRENDING    # Strong directional movement (signals encouraged)
+RANGING     # Sideways price action (signals discouraged) 
+VOLATILE    # High volatility/noise (signals filtered)
+UNCLEAR     # Insufficient data (signals cautious)
 ```
 
-**Aggressive Production**
-```bash
-MAX_SYMBOLS=200
-SYMBOL_SELECTION_STRATEGY=volume
-MIN_DAILY_VOLUME_USDT=1000000      # $1M minimum
-MIN_MARKET_CAP_USD=0               # No market cap filter
+#### **Adaptive Filtering**
+- **Price action analysis**: Detects breakouts, ranges, and volatility
+- **Adaptive filtering**: Rejects inappropriate signals for current regime
+- **Risk adjustment**: Modifies signal confidence based on market state
+
+### **Higher Timeframe Confirmation**
+
+Multi-timeframe analysis prevents false signals:
+
+```
+15m signal → Check 1h trend → Check 4h trend → Check 1d trend
+    ↓              ↓              ↓              ↓
+If all higher timeframes align → CONFIRM signal
+If higher timeframes conflict → REJECT signal
 ```
 
-**Testing Setup**
-```bash
-MAX_SYMBOLS=20
-SYMBOL_SELECTION_STRATEGY=random
-MIN_DAILY_VOLUME_USDT=100000       # $100K minimum
-```
+### **Thread-Safe Concurrency**
 
-#### Benefits
-- **Quality Focus**: Only high-volume, active symbols selected
-- **Resource Efficiency**: 60-80% reduction in memory/database usage when limited
-- **Flexible Configuration**: Unlimited (undefined) or limited (set number)
-- **Performance Optimization**: Reduced WebSocket streams and API calls
-- **Smart Filtering**: Multi-layer filtering ensures quality symbols
+Advanced concurrency patterns for optimal performance:
 
-### Database Management
+- **Thread-safe data access**: All shared data protected with `threading.RLock()`
+- **Async signal processing**: `ThreadPoolExecutor` prevents WebSocket blocking
+- **Connection pooling**: Database connections reused across threads
+- **Non-blocking chart generation**: Playwright runs in dedicated thread
+- **Rate-limited concurrent requests**: Each request respects API limits
 
-The bot includes automatic database management to prevent unlimited growth:
+## **Database Management**
+
+### **Automatic Database Optimization**
+
+The bot includes comprehensive database management:
 
 - **Automatic cleanup**: Removes data older than 7 days (configurable)
 - **Size monitoring**: Triggers cleanup when database exceeds 200MB
 - **Data compression**: Keeps every 4th record for data older than 3 days
 - **Background maintenance**: Runs cleanup every 6 hours automatically
+- **WAL mode**: Write-Ahead Logging for better concurrency
+- **Connection pooling**: 10 concurrent connections by default
 
-## Installation
+### **Database Schema**
+```sql
+-- Historical OHLCV data with automatic cleanup
+historical_data (symbol, interval, timestamp, open, high, low, close, volume)
 
-### Docker (Recommended)
-```bash
-git clone https://github.com/rizesky/tele-bot-trading.git
-cd tele-bot-trading
-docker build -t tele-bot-trading .
-docker run -d --name trading-bot --env-file .env -v $(pwd)/charts:/app/charts tele-bot-trading
+-- Trading signals with metadata
+signals (id, symbol, interval, signal_type, price, entry_prices, tp_levels, sl_level, leverage, margin_type, timestamp)
+
+-- Bot state and configuration
+bot_state (key, value, updated_at)
+
+-- Cached API responses for performance
+api_cache (key, data, expires_at)
 ```
 
-### Local Installation
+## **Installation**
+
+### **Docker (Recommended)**
+```bash
+# Build and run with Docker
+docker build -t tele-bot-trading .
+docker run -d --name trading-bot \
+  --env-file .env \
+  -v $(pwd)/charts:/app/charts \
+  -v $(pwd)/logs:/app/logs \
+  -v $(pwd)/trading_bot.db:/app/trading_bot.db \
+  tele-bot-trading
+```
+
+### **Local Installation**
 ```bash
 git clone https://github.com/rizesky/tele-bot-trading.git
 cd tele-bot-trading
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+playwright install  # Install browser binaries for chart generation
 python main.py
 ```
 
-## Configuration
+## **Configuration**
 
-Copy `env.example` to `.env` and configure:
-
-### Required Settings
+### **Required Settings**
 ```bash
 # Binance API
 BINANCE_API_KEY=your_binance_api_key
@@ -253,58 +256,46 @@ BINANCE_ENV=dev  # or prod
 # Telegram
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 TELEGRAM_CHAT_ID=your_telegram_chat_id
-TELEGRAM_SEND_MESSAGE_URL=https://api.telegram.org/bot{token}/sendMessage
-TELEGRAM_SEND_PHOTO_URL=https://api.telegram.org/bot{token}/sendPhoto
 
 # Trading
 TIMEFRAMES=15m,30m,1h,4h
-SYMBOLS=  # Leave empty to auto-fetch all symbols
+HISTORY_CANDLES=200  # Maximum: 1500 (Binance limit)
 ```
 
-### Performance & Memory Configuration
+### **Rate Limiting Configuration**
+```bash
+# Enable rate limiting (HIGHLY RECOMMENDED)
+RATE_LIMITING_ENABLED=1
+RATE_LIMIT_SAFETY_MARGIN=0.1
+RATE_LIMIT_WARNING_THRESHOLD=0.8
+RATE_LIMIT_DETAILED_LOGGING=1
+```
+
+### **Performance & Memory Configuration**
 ```bash
 # Lazy loading (recommended: enabled)
 LAZY_LOADING_ENABLED=1
 MAX_LAZY_LOAD_SYMBOLS=100
 MAX_CONCURRENT_LOADS=15
 
-# Historical data per symbol/timeframe
-HISTORY_CANDLES=200
-
-# Signal cooldown for simulation mode (live mode uses timeframe-based cooldown)
-SIGNAL_COOLDOWN=300
-```
-
-### Symbol Selection & Limiting
-```bash
-# Maximum symbols to monitor (undefined = unlimited)
+# Symbol selection
 MAX_SYMBOLS=100
-
-# Selection strategy: quality, volume, or random
 SYMBOL_SELECTION_STRATEGY=quality
-
-# Volume and market cap filters
 MIN_DAILY_VOLUME_USDT=1000000
 MIN_MARKET_CAP_USD=1000000000
-
-# No refresh intervals needed - uses standard weekly refresh
 ```
 
-### Database Configuration
+### **Database Configuration**
 ```bash
-# Data retention (days to keep historical data)
+# Data retention and size limits
 DB_CLEANUP_DAYS=7
-
-# Size limits for automatic cleanup
 DB_MAX_SIZE_MB=200
 DB_MAX_RECORDS=1000000
-
-# Automatic maintenance
 DB_AUTO_CLEANUP_ENABLED=1
 DB_CLEANUP_INTERVAL_HOURS=6
 ```
 
-### Risk Management
+### **Risk Management**
 ```bash
 DEFAULT_SL_PERCENT=0.02
 DEFAULT_TP_PERCENTS=0.015,0.03,0.05,0.08
@@ -312,9 +303,9 @@ MAX_LEVERAGE=20
 FILTER_BY_MARKET_CAP=0
 ```
 
-## Operation Modes
+## **Operation Modes**
 
-### Live Trading Mode (Production)
+### **Live Trading Mode (Production)**
 ```bash
 SIMULATION_MODE=0
 DATA_TESTING=0
@@ -323,11 +314,12 @@ DATA_TESTING=0
 - Real market signals with full validation
 - **Strict signal conditions**: RSI < 40 for BUY, RSI > 60 for SELL
 - **Volume confirmation**: Required for all signals
-- **Market regime filtering**: Signals rejected if inappropriate for market conditions
+- **Market regime filtering**: Signals rejected if inappropriate
 - **Signal cooldown**: Timeframe-based (15m=15min, 1h=1hour, 4h=4hours)
 - **Higher timeframe confirmation**: Required for signal validation
+- **Rate limiting**: Full protection enabled
 
-### Simulation Mode (Testing)
+### **Simulation Mode (Testing)**
 ```bash
 SIMULATION_MODE=1
 DATA_TESTING=0
@@ -338,223 +330,140 @@ DATA_TESTING=0
 - **Volume confirmation**: Bypassed (always true)
 - **Market regime filtering**: Disabled
 - **Signal cooldown**: 5 minutes (300 seconds)
-- **Purpose**: Safe testing without conservative restrictions
+- **Rate limiting**: Full protection enabled
 
-### Data Testing Mode (Development)
+### **Data Testing Mode (Development)**
 ```bash
 DATA_TESTING=1
 ```
 **Characteristics:**
-- **Artificial test data**: Uses generated OHLCV data (not real market)
+- **Artificial test data**: Uses generated OHLCV data
 - **Immediate signals**: Generates test signals instantly on startup
 - **Default symbols**: BTCUSDT, ETHUSDT, BNBUSDT if none configured
-- **Purpose**: Development, debugging, and feature testing
+- **Rate limiting**: Disabled for testing
 
-### Trading Mode Comparison
+## **Performance Metrics**
 
-| Feature | Live Trading | Simulation | Data Testing |
-|---------|-------------|------------|--------------|
-| **Data Source** | Real Market | Real Market | Artificial |
-| **RSI Thresholds** | Strict (40/60) | Any Level | Test Data |
-| **Volume Check** | Required | Bypassed | Test Data |
-| **Market Regime** | Enforced | Bypassed | N/A |
-| **Signal Cooldown** | Timeframe Duration | 5 minutes | None |
-| **Purpose** | Production | Testing | Development |
-
-## Signal Quality
-
-Each signal includes:
-- Entry price (current market price)
-- Take profit levels (1.5%, 3%, 5%, 8%)
-- Stop loss (2% from entry)
-- Leverage (fetched from Binance)
-- ATR-based position sizing guidance
-- TradingView-style chart
-
-## Technical Architecture & Performance
-
-### Thread Safety & Concurrency
-
-The bot uses advanced concurrency patterns for optimal performance:
-
-- **Thread-safe data access**: All shared data protected with `threading.RLock()`
-- **Async signal processing**: `ThreadPoolExecutor` prevents WebSocket blocking
-- **Connection pooling**: Database connections reused across threads
-- **Non-blocking chart generation**: Playwright runs in dedicated thread
-
-### Memory Management
-
-#### Sliding Window Data
-```python
-# Only keeps recent candles per symbol
-HISTORY_CANDLES=200  # Per symbol/timeframe
-
-# Example: 100 symbols × 4 timeframes × 200 candles = 80,000 total candles
-```
-
-#### Data Lifecycle
-```
-WebSocket Candle → Update DataFrame → Keep 200 recent → Drop oldest
-```
-
-### Signal Processing Pipeline
-
-```
-WebSocket Data → TradeManager → StrategyExecutor → TelegramClient
-     ↓              ↓               ↓                  ↓
-Real-time       Cache/Update    Async Process     Send Alert
-WebSocket       DataFrames      (ThreadPool)      + Chart
-```
-
-### Performance Metrics
-
-#### Expected Resource Usage
+### **Expected Resource Usage**
 - **Memory**: 200-500MB (depending on symbol count and lazy loading)
 - **CPU**: 10-30% during active trading
 - **Database**: 50-75MB/month growth (with auto-cleanup)
 - **Network**: 1-5 Mbps (WebSocket + API calls)
+- **API Usage**: 50-200 requests/hour (with rate limiting)
 
-#### Signal Frequency
+### **Signal Frequency**
 - **Live mode**: 1-5 signals per hour (strict conditions)
 - **Simulation mode**: 5-15 signals per hour (relaxed conditions)
 - **Data testing**: Immediate test signals on startup
 
-### Database Performance
+### **Rate Limiting Performance**
+- **Weight usage**: Typically 10-30% of 1200 limit
+- **Request queuing**: 0-5 seconds delay when approaching limits
+- **API efficiency**: 60-80% reduction in API calls with lazy loading
+- **Concurrent handling**: 15+ simultaneous requests with rate limiting
 
-#### Connection Pooling
+## **Docker Deployment**
+
+### **Build and Run**
 ```bash
-DB_POOL_SIZE=10  # Concurrent connections
+# Build the image
+docker build -t tele-bot-trading .
+
+# Run with environment file
+docker run -d --name trading-bot \
+  --env-file .env \
+  -v $(pwd)/charts:/app/charts \
+  -v $(pwd)/logs:/app/logs \
+  -v $(pwd)/trading_bot.db:/app/trading_bot.db \
+  tele-bot-trading
 ```
 
-#### WAL Mode (Write-Ahead Logging)
-- **Concurrent reads**: Multiple threads can read simultaneously
-- **Non-blocking writes**: Writers don't block readers
-- **Better performance**: ~3x faster than default journaling
-
-#### Automatic Optimization
-- **VACUUM**: Reclaims space after cleanup
-- **ANALYZE**: Updates query planner statistics
-- **Compression**: Reduces storage by 60-80% for old data
-
-## Docker Deployment
-
-### Build and Run
+### **Docker Deployment**
 ```bash
+# Build and run with Docker
 docker build -t tele-bot-trading .
 docker run -d --name trading-bot \
   --env-file .env \
   -v $(pwd)/charts:/app/charts \
   -v $(pwd)/logs:/app/logs \
+  -v $(pwd)/trading_bot.db:/app/trading_bot.db \
   tele-bot-trading
 ```
 
-### Check Logs
+### **Monitoring**
 ```bash
+# Check logs
 docker logs -f trading-bot
-```
 
-### Database Maintenance
-The bot automatically manages database size, but you can monitor:
-```bash
+# Check rate limiting stats
+docker exec trading-bot python -c "
+from binance_future_client import BinanceFuturesClient
+client = BinanceFuturesClient('key', 'secret')
+stats = client.get_rate_limit_stats()
+print(f'Weight usage: {stats[\"weight_usage_percent\"]:.1f}%')
+"
+
+# Check database size
 docker exec trading-bot ls -la trading_bot.db
 ```
 
-## Common Configuration Pitfalls
+## **Troubleshooting**
 
-### Symbol Configuration
+### **Rate Limiting Issues**
+
+**For comprehensive rate limiting troubleshooting, see [RATE_LIMITING_GUIDE.md](RATE_LIMITING_GUIDE.md)**
+
+#### **High Usage Warnings**
 ```bash
-# ✅ CORRECT: Leave empty for auto-fetch OR specify symbols
-SYMBOLS=                    # Auto-fetch all symbols
-SYMBOLS=BTCUSDT,ETHUSDT    # Specific symbols only
+# Check current usage
+docker logs trading-bot | grep "High API usage"
 
-# ✅ CORRECT: Smart symbol limiting
-MAX_SYMBOLS=100             # Limit to top 100 symbols
-# MAX_SYMBOLS=               # Undefined = unlimited (comment out)
+# Solutions:
+# 1. Reduce symbol count
+MAX_SYMBOLS=50
+
+# 2. Increase safety margin
+RATE_LIMIT_SAFETY_MARGIN=0.2
+
+# 3. Enable lazy loading
+LAZY_LOADING_ENABLED=1
 ```
 
-### Timeframe Syntax
+#### **API Bans (HTTP 418)**
 ```bash
-# ❌ WRONG: Invalid timeframe format
-TIMEFRAMES=15min,30min,1hour
+# If you get banned:
+# 1. Stop the bot immediately
+docker stop trading-bot
 
-# ✅ CORRECT: Use Binance standard format
-TIMEFRAMES=15m,30m,1h,4h
+# 2. Wait 24-48 hours before restarting
+# 3. Increase safety margin significantly
+RATE_LIMIT_SAFETY_MARGIN=0.3
+
+# 4. Reduce symbol count
+MAX_SYMBOLS=20
+
+# 5. Contact Binance support if persistent
 ```
 
-### Trading Mode Conflicts
-```bash
-# ❌ WRONG: Conflicting modes
-SIMULATION_MODE=1
-DATA_TESTING=1      # Both enabled = undefined behavior
+### **Performance Issues**
 
-# ✅ CORRECT: One mode at a time
-SIMULATION_MODE=1   # OR
-DATA_TESTING=1      # NOT both
-```
-
-### Database Path Issues
-```bash
-# ❌ WRONG: Relative path in Docker
-DB_PATH=./data/trading.db
-
-# ✅ CORRECT: Absolute path or filename
-DB_PATH=trading_bot.db              # In working directory
-DB_PATH=/app/data/trading_bot.db    # Absolute path
-```
-
-## Troubleshooting
-
-### Common Startup Issues
-
-#### "No symbols found" Error
-```bash
-# Check symbol configuration
-echo $SYMBOLS
-
-# If empty, ensure API keys work and auto-fetch is enabled
-curl -H "X-MBX-APIKEY: $BINANCE_API_KEY" \
-     "https://fapi.binance.com/fapi/v1/exchangeInfo"
-
-# Check if MAX_SYMBOLS is too restrictive
-echo $MAX_SYMBOLS
-```
-
-#### "No Telegram messages" Issue
-```bash
-# Verify configuration
-echo $TELEGRAM_BOT_TOKEN
-echo $TELEGRAM_CHAT_ID
-
-# Test Telegram connectivity
-curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
-     -d "chat_id=$TELEGRAM_CHAT_ID&text=Test message"
-```
-
-#### Database Connection Errors
-```bash
-# Check file permissions
-ls -la trading_bot.db*
-
-# Reset database (nuclear option)
-rm trading_bot.db*
-# Bot will recreate on restart
-```
-
-### Performance Troubleshooting
-
-#### High Memory Usage
+#### **High Memory Usage**
 ```bash
 # Check lazy loading status
 docker logs trading-bot | grep "LAZY_LOADING_ENABLED"
 
-# Reduce symbol limit
-MAX_LAZY_LOAD_SYMBOLS=50  # in .env
+# Solutions:
+# 1. Reduce symbol limit
+MAX_LAZY_LOAD_SYMBOLS=50
 
-# Or disable lazy loading completely
-LAZY_LOADING_ENABLED=0   # ⚠️ Not recommended
+# 2. Enable lazy loading
+LAZY_LOADING_ENABLED=1
+
+# 3. Reduce concurrent loads
+MAX_CONCURRENT_LOADS=10
 ```
 
-#### WebSocket Connection Issues
+#### **WebSocket Connection Issues**
 ```bash
 # Check connectivity
 curl -I https://fapi.binance.com/fapi/v1/ping
@@ -566,65 +475,166 @@ docker logs trading-bot | grep -i "websocket\|connection"
 telnet fstream.binance.com 443
 ```
 
-#### Chart Generation Failures
+### **Database Issues**
 ```bash
-# Check Playwright browser
-docker exec trading-bot ls -la /usr/bin/chromium
+# Check database size
+docker exec trading-bot ls -la trading_bot.db
 
-# Check chart directory permissions
-docker exec trading-bot ls -la charts/
+# Check database integrity
+docker exec trading-bot sqlite3 trading_bot.db "PRAGMA integrity_check;"
 
-# Manual chart test
-docker exec trading-bot python -c "
-from playwright.async_api import async_playwright
-import asyncio
-async def test(): 
-    p = await async_playwright().start()
-    b = await p.chromium.launch()
-    await b.close()
-    await p.stop()
-    print('Playwright OK')
-asyncio.run(test())
-"
+# Reset database (nuclear option)
+docker exec trading-bot rm trading_bot.db*
+# Bot will recreate on restart
 ```
 
-## Security
+## **Security**
 
-### API Key Setup
+### **API Key Setup**
 - Enable "Futures Trading" permission only
 - Set IP restrictions on Binance API keys
 - Use testnet for development (BINANCE_ENV=dev)
+- Monitor API usage regularly
 
-### VPN Requirements
-Due to geo-restrictions, VPN may be required in certain regions:
+### **Rate Limiting Security**
+- Always enable rate limiting in production
+- Use conservative safety margins (10-20%)
+- Monitor usage statistics regularly
+- Set up alerts for high usage warnings
+
+### **VPN Requirements**
+Due to geo-restrictions, VPN may be required:
 - Use consistent VPN location
 - Avoid switching locations during operation
 - Consider static IP addresses
+- Test connectivity before deployment
 
-## Development
+## **Advanced Usage**
 
-### Adding New Features
+### **Custom Signal Strategies**
+```python
+# Modify strategy.py for custom logic
+def check_signal(df):
+    # Your custom signal logic here
+    # Return "BUY", "SELL", or None
+    pass
+```
+
+### **Custom Risk Management**
+```python
+# Modify risk_manager.py for custom risk rules
+def calculate_position_size(symbol, price, atr):
+    # Your custom position sizing logic
+    pass
+```
+
+### **Database Queries**
+```sql
+-- Get signal statistics
+SELECT symbol, COUNT(*) as signal_count, 
+       AVG(price) as avg_price
+FROM signals 
+WHERE timestamp > datetime('now', '-7 days')
+GROUP BY symbol;
+
+-- Get API usage statistics
+SELECT * FROM api_cache 
+WHERE key LIKE 'rate_limit_%';
+```
+
+## **Contributing**
+
+### **Development Setup**
 1. Fork the repository
 2. Create feature branch
-3. Test with SIMULATION_MODE=1
-4. Submit pull request
+3. Test with `SIMULATION_MODE=1`
+4. Run rate limiting tests: `python test_rate_limiting.py`
+5. Submit pull request
 
-### Database Schema
-The bot uses SQLite with automatic migrations:
-- `historical_data`: OHLCV data with automatic cleanup
-- `signals`: Trading signals with metadata
-- `bot_state`: Persistent configuration
-- `api_cache`: Cached API responses
+### **Code Standards**
+- Follow existing code style
+- Add comprehensive tests for new features
+- Update documentation for new functionality
+- Ensure thread safety for concurrent operations
 
-## Donations
+## **Monitoring & Analytics**
+
+### **Rate Limiting Monitoring**
+```bash
+# Real-time usage monitoring
+docker logs -f trading-bot | grep "Rate Limiter Stats"
+
+# Usage statistics
+docker exec trading-bot python -c "
+from binance_future_client import BinanceFuturesClient
+client = BinanceFuturesClient('key', 'secret')
+stats = client.get_rate_limit_stats()
+print(f'Weight: {stats[\"current_weight_used\"]}/{stats[\"weight_limit\"]}')
+print(f'Requests: {stats[\"current_requests\"]}/{stats[\"request_limit\"]}')
+print(f'Blocked: {stats[\"blocked_requests\"]}')
+"
+```
+
+### **Performance Monitoring**
+```bash
+# Memory usage
+docker stats trading-bot
+
+# Database size
+docker exec trading-bot ls -la trading_bot.db
+
+# Signal frequency
+docker logs trading-bot | grep "signal" | wc -l
+```
+
+## **Best Practices**
+
+### **Production Deployment**
+1. **Always enable rate limiting** (`RATE_LIMITING_ENABLED=1`)
+2. **Use conservative safety margins** (10-20%)
+3. **Enable lazy loading** for better performance
+4. **Limit symbol count** (50-200 symbols)
+5. **Monitor usage statistics** regularly
+6. **Use simulation mode** for testing
+7. **Set up proper logging** and monitoring
+
+### **API Usage Optimization**
+1. **Use lazy loading** to reduce API calls
+2. **Optimize request limits** (use 200-500 candles)
+3. **Monitor rate limiting** statistics
+4. **Use database caching** for historical data
+5. **Avoid unnecessary API calls**
+
+### **Risk Management**
+1. **Start with simulation mode** for testing
+2. **Use conservative position sizes**
+3. **Monitor market conditions**
+4. **Set appropriate stop losses**
+5. **Diversify across timeframes**
+
+## **Support**
+
+### **Common Issues**
+- Check the troubleshooting section above
+- Review logs for error messages
+- Test with simulation mode first
+- Verify API credentials and permissions
+
+### **Getting Help**
+- Create an issue on GitHub
+- Include relevant logs and configuration
+- Test with `DATA_TESTING=1` for debugging
+- Run `python test_rate_limiting.py` for rate limiting issues
+
+## **License**
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## **Donations**
 
 If this project helped you make money or saved you time, consider supporting its development:
 
 - **PayPal**: [Donate via PayPal](https://paypal.me/rizesky)
 - **GitHub Sponsors**: [Sponsor on GitHub](https://github.com/sponsors/rizesky)
 
-Every donation helps keep this project maintained and improved! 🙏
-
-## License
-
-MIT License - see LICENSE file for details.
+Every donation helps keep this project maintained and improved!

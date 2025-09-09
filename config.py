@@ -68,4 +68,15 @@ DB_MAX_RECORDS = int(os.getenv("DB_MAX_RECORDS", 1000000))  # Maximum total reco
 DB_AUTO_CLEANUP_ENABLED = True if int(os.getenv("DB_AUTO_CLEANUP_ENABLED", 1)) == 1 else False  # Enable automatic cleanup
 DB_CLEANUP_INTERVAL_HOURS = int(os.getenv("DB_CLEANUP_INTERVAL_HOURS", 6))  # Hours between cleanup checks
 
+# Rate limiting configuration
+RATE_LIMITING_ENABLED = True if int(os.getenv("RATE_LIMITING_ENABLED", 1)) == 1 else False  # Enable rate limiting
+RATE_LIMIT_SAFETY_MARGIN = float(os.getenv("RATE_LIMIT_SAFETY_MARGIN", 0.1))  # 10% safety margin
+RATE_LIMIT_WARNING_THRESHOLD = float(os.getenv("RATE_LIMIT_WARNING_THRESHOLD", 0.8))  # 80% warning threshold
+RATE_LIMIT_MAX_WEIGHT_PER_MINUTE = int(os.getenv("RATE_LIMIT_MAX_WEIGHT_PER_MINUTE", 1200))  # Binance standard limit
+RATE_LIMIT_MAX_REQUESTS_PER_MINUTE = int(os.getenv("RATE_LIMIT_MAX_REQUESTS_PER_MINUTE", 1200))  # Binance standard limit
+RATE_LIMIT_RETRY_DELAY = float(os.getenv("RATE_LIMIT_RETRY_DELAY", 1.0))  # Retry delay in seconds
+RATE_LIMIT_MAX_RETRIES = int(os.getenv("RATE_LIMIT_MAX_RETRIES", 3))  # Maximum retry attempts
+RATE_LIMIT_DETAILED_LOGGING = True if int(os.getenv("RATE_LIMIT_DETAILED_LOGGING", 1)) == 1 else False  # Enable detailed logging
+RATE_LIMIT_LOG_INTERVAL = int(os.getenv("RATE_LIMIT_LOG_INTERVAL", 60))  # Log interval in seconds
+
 

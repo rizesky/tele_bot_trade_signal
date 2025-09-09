@@ -127,7 +127,7 @@ class TradeManager:
         logging.info(f"CONCURRENT LOADING COMPLETED: Finished in {duration:.2f}s - {successful_loads}/{len(tasks)} successful ({successful_loads/len(tasks)*100:.1f}% success rate)")
 
     def _load_single_historical_data(self, symbol, interval):
-        """Load historical data for a single symbol/interval with database caching."""
+        """Load historical data for a single symbol/interval with database caching and rate limiting optimization."""
         try:
             # Try to load from database first if persistence is enabled
             if self.db:
@@ -136,8 +136,11 @@ class TradeManager:
                     logging.debug(f"Loaded {len(db_data)} candles from database for {symbol}-{interval}")
                     return db_data
             
-            # Load from API if not in database or insufficient data
-            api_data = self.binance_client.load_historical_data(symbol, interval, limit=config.HISTORY_CANDLES)
+            # Use optimal limit to minimize weight usage
+            optimal_limit = self.binance_client.get_optimal_klines_limit(config.HISTORY_CANDLES)
+            
+            # Load from API with optimized limit
+            api_data = self.binance_client.load_historical_data(symbol, interval, limit=optimal_limit)
             
             # Store in database for future use
             if self.db and api_data is not None and not api_data.empty:

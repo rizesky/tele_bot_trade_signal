@@ -39,6 +39,15 @@ class AppRunner:
         self.symbol_manager = SymbolManager(self.binance_client)
         self.charting_service = ChartingService()
         self.risk_manager = RiskManager(self.binance_client)
+        
+        # Rate limiting monitoring
+        self.rate_limit_monitor_thread = None
+        if config.RATE_LIMITING_ENABLED:
+            self.rate_limit_monitor_thread = threading.Thread(
+                name="RateLimitMonitor",
+                target=self._monitor_rate_limits,
+                daemon=True
+            )
 
     def shutdown_handler(self, signum, frame):
         if self.is_shutting_down.is_set():
@@ -76,6 +85,8 @@ class AppRunner:
             
         if config.HISTORY_CANDLES <= 0:
             validation_errors.append("HISTORY_CANDLES must be positive")
+        elif config.HISTORY_CANDLES > 1500:
+            validation_errors.append("HISTORY_CANDLES cannot exceed 1500 (Binance API limit)")
             
         if config.SIGNAL_COOLDOWN < 0:
             validation_errors.append("SIGNAL_COOLDOWN must be non-negative")
@@ -108,6 +119,11 @@ class AppRunner:
         
         if self.db_maintenance:
             self.db_maintenance.start()
+        
+        # Start rate limiting monitor if enabled
+        if self.rate_limit_monitor_thread:
+            self.rate_limit_monitor_thread.start()
+            logging.info("Rate limiting monitor started")
 
         trade_manager = TradeManager(self.binance_client, symbol_manager=self.symbol_manager)
 
@@ -152,6 +168,36 @@ class AppRunner:
         finally:
             if not self.is_shutting_down.is_set():
                 self.shutdown_handler(None, None)
+    
+    def _monitor_rate_limits(self):
+        """Monitor rate limiting usage and log statistics periodically."""
+        while not self.stop_event.is_set():
+            try:
+                if self.binance_client.rate_limiter:
+                    stats = self.binance_client.get_rate_limit_stats()
+                    if stats:
+                        # Log warning if approaching limits
+                        if stats['weight_usage_percent'] > 80 or stats['request_usage_percent'] > 80:
+                            logging.warning(
+                                f"High API usage: Weight {stats['weight_usage_percent']:.1f}%, "
+                                f"Requests {stats['request_usage_percent']:.1f}%"
+                            )
+                        
+                        # Log detailed stats every 5 minutes
+                        if stats['total_requests'] > 0 and stats['total_requests'] % 100 == 0:
+                            logging.info(
+                                f"API Usage Summary: {stats['total_requests']} requests, "
+                                f"{stats['total_weight_used']} weight used, "
+                                f"{stats['blocked_requests']} blocked, "
+                                f"{stats['retry_attempts']} retries"
+                            )
+                
+                # Check every 30 seconds
+                self.stop_event.wait(30)
+                
+            except Exception as e:
+                logging.error(f"Error in rate limit monitor: {e}")
+                self.stop_event.wait(30)
 
 
 def setup_logging():
