@@ -79,7 +79,7 @@ The bot optimizes request parameters to minimize weight usage:
 ```python
 # Instead of requesting 1500 candles (weight 10):
 # The bot will make 2 requests of 750 candles each (weight 5 + 5 = 10)
-# But this is more efficient for rate limiting
+# This approach is more efficient for rate limiting
 ```
 
 ### 3. Real-time Monitoring
@@ -112,7 +112,7 @@ The bot provides detailed logging about rate limiting:
 
 ### Statistics
 
-You can check current usage through the API:
+Current usage can be checked through the API:
 
 ```python
 stats = binance_client.get_rate_limit_stats()
@@ -159,7 +159,7 @@ Run the rate limiting test script to verify everything works:
 python test_rate_limiting.py
 ```
 
-This will test:
+The test script will verify:
 - Weight calculation accuracy
 - Rate limiting logic
 - Binance API integration
@@ -170,7 +170,7 @@ This will test:
 
 ### High Usage Warnings
 
-If you see frequent warnings:
+When frequent warnings appear:
 
 1. **Check your symbol count**: Too many symbols = more API calls
 2. **Reduce MAX_SYMBOLS**: Limit to 50-100 symbols
@@ -187,7 +187,7 @@ If requests are being blocked:
 
 ### API Bans
 
-If you get banned (HTTP 418):
+When API bans occur (HTTP 418):
 
 1. **Stop the bot immediately**
 2. **Wait 24-48 hours** before restarting
@@ -199,10 +199,10 @@ If you get banned (HTTP 418):
 
 ### Custom Weight Limits
 
-If you have special API access:
+For special API access:
 
 ```bash
-# For higher limits (if you have special access)
+# For higher limits (requires special access)
 RATE_LIMIT_MAX_WEIGHT_PER_MINUTE=2400
 RATE_LIMIT_MAX_REQUESTS_PER_MINUTE=2400
 ```

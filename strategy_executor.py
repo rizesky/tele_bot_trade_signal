@@ -5,14 +5,12 @@ import threading
 
 import config
 from charting_service import ChartingService
-from config import MAX_LEVERAGE
 from risk_manager import RiskManager
 from strategy import check_signal
 from telegram_client import format_signal_message, send_message_with_retry
 from trade_manager import TradeManager
-from util import create_realistic_test_data, timeframe_to_seconds
+from util import create_realistic_test_data, timeframe_to_seconds, now_utc
 from database import get_database
-from util import now_utc
 from structs import ChartData, ChartCallbackData, SignalNotificationData
 
 
@@ -217,8 +215,10 @@ class StrategyExecutor:
             except (IndexError, ValueError, TypeError):
                 logging.warning(f"Error getting last price for {symbol}-{interval}")
                 return
-            leverage, margin_type = self.risk_manager.get_configured_leverage_and_margin_type(symbol)
-            entry_prices, tp_list, sl, risk_guidance = self._generate_trade_parameters(signal_info, last_price, df)
+            # Get max leverage for display (not current position leverage)
+            max_leverage = self.risk_manager.get_max_leverage_for_symbol(symbol) if self.risk_manager else 20
+            margin_type = "ISOLATED"  # Use ISOLATED as default margin type
+            entry_prices, tp_list, sl, risk_guidance = self._generate_trade_parameters(signal_info, last_price, df, symbol)
 
             if entry_prices:
                 # Use clean data specifically for chart generation to prevent rendering issues
@@ -241,7 +241,7 @@ class StrategyExecutor:
                         ChartCallbackData(
                             chart_path=path, error=error, symbol=symbol, interval=interval,
                             entry_prices=entry_prices, tp_list=tp_list, sl=sl,
-                            signal_info=signal_info, leverage=leverage, margin_type=margin_type
+                            signal_info=signal_info, leverage=max_leverage, margin_type=margin_type
                         )
                     )
                 )
@@ -319,10 +319,41 @@ class StrategyExecutor:
             logging.warning(f"Error checking higher timeframe trend for {symbol}-{interval}: {e}")
             return True  # Don't block signals on error
 
-    def _generate_trade_parameters(self, signal_info, last_price, df=None):
-        """Generate trade parameters with ATR-based position sizing."""
+    def _generate_trade_parameters(self, signal_info, last_price, df=None, symbol=None):
+        """Generate trade parameters with leverage-based TP/SL calculation."""
 
-        # Access the final, pre-calculated values from the config file
+        # Use leverage-based calculation if symbol is provided and risk manager is available
+        if symbol and self.risk_manager and config.LEVERAGE_BASED_TP_SL_ENABLED:
+            try:
+                tp_list, sl, risk_info = self.risk_manager.calculate_leverage_based_tp_sl(
+                    symbol, last_price, signal_info
+                )
+                entry_prices = [last_price]
+                
+                # Add ATR-based risk guidance if data is available
+                risk_guidance = None
+                if df is not None and len(df) >= 14:
+                    try:
+                        from strategy import compute_atr, calculate_risk_guidance
+                        atr = compute_atr(df)
+                        if atr > 0:
+                            risk_guidance = calculate_risk_guidance(atr, last_price)
+                            logging.debug(f"ATR Risk Guidance for {signal_info}: {risk_guidance['position_guidance']}")
+                    except Exception as e:
+                        logging.warning(f"Error calculating ATR-based risk guidance: {e}")
+                
+                # Add leverage-based risk info to guidance
+                if risk_guidance is None:
+                    risk_guidance = {}
+                risk_guidance.update(risk_info)
+                
+                return entry_prices, tp_list, sl, risk_guidance
+                
+            except Exception as e:
+                logging.error(f"Error in leverage-based calculation for {symbol}: {e}")
+                # Fall through to default calculation
+        
+        # Fallback to default calculation using config percentages
         sl_percent = config.DEFAULT_SL_PERCENT
         tp_percents = config.DEFAULT_TP_PERCENTS
 
@@ -417,7 +448,7 @@ class StrategyExecutor:
                     except (IndexError, ValueError, TypeError):
                         logging.warning(f"Error getting test last price for {symbol}-{interval}")
                         continue
-                    entry_prices, tp_list, sl, risk_guidance = self._generate_trade_parameters(test_signal, last_price)
+                    entry_prices, tp_list, sl, risk_guidance = self._generate_trade_parameters(test_signal, last_price, df, symbol)
 
                     if entry_prices:
                         # Only generate charts if charting service is available
@@ -432,7 +463,7 @@ class StrategyExecutor:
                                     ChartCallbackData(
                                         chart_path=path, error=error, symbol=symbol, interval=interval,
                                         entry_prices=entry_prices, tp_list=tp_list, sl=sl,
-                                        signal_info=test_signal, leverage=MAX_LEVERAGE, margin_type="Isolated"
+                                        signal_info=test_signal, leverage=self.risk_manager.get_max_leverage_for_symbol(symbol) if self.risk_manager else 20, margin_type="Isolated"
                                     )
                                 )
                             )

@@ -31,6 +31,15 @@ TIMEFRAMES = _get_timeframes_from_env()
 MAX_LEVERAGE = os.getenv("MAX_LEVERAGE", "20")
 FILTER_BY_MARKET_CAP= True if int(os.getenv("FILTER_BY_MARKET_CAP", 0)) == 1 else False # Default false
 
+# Leverage-based TP/SL configuration
+LEVERAGE_BASED_TP_SL_ENABLED = True if int(os.getenv("LEVERAGE_BASED_TP_SL_ENABLED", 1)) == 1 else False
+LEVERAGE_BASE_RISK_PERCENT = float(os.getenv("LEVERAGE_BASE_RISK_PERCENT", "2.0"))  # Base risk per trade
+LEVERAGE_BASE_TP_PERCENT = float(os.getenv("LEVERAGE_BASE_TP_PERCENT", "1.0"))  # Base TP distance
+LEVERAGE_MIN_SL_DISTANCE = float(os.getenv("LEVERAGE_MIN_SL_DISTANCE", "0.1"))  # Minimum SL distance %
+LEVERAGE_MAX_SL_DISTANCE = float(os.getenv("LEVERAGE_MAX_SL_DISTANCE", "5.0"))  # Maximum SL distance %
+LEVERAGE_MIN_TP_DISTANCE = float(os.getenv("LEVERAGE_MIN_TP_DISTANCE", "0.2"))  # Minimum TP distance %
+LEVERAGE_MAX_TP_DISTANCE = float(os.getenv("LEVERAGE_MAX_TP_DISTANCE", "3.0"))  # Maximum TP distance %
+
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 TELEGRAM_SEND_MESSAGE_URL = os.getenv("TELEGRAM_SEND_MESSAGE_URL", "https://api.telegram.org/bot{token}/sendMessage").format(token=TELEGRAM_BOT_TOKEN) if TELEGRAM_BOT_TOKEN else None

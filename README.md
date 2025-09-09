@@ -1,10 +1,10 @@
-# Advanced Trading Signal Bot
+# Trading Signal Bot
 
 A sophisticated cryptocurrency trading signal bot for Binance Futures with advanced technical analysis, intelligent risk management, automated chart generation, and comprehensive rate limiting protection.
 
 ## **Key Features**
 
-### **Advanced Signal Generation**
+### **Signal Generation**
 - **Multi-timeframe analysis** (15m, 30m, 1h, 4h) with higher timeframe confirmation
 - **RSI + Moving Average crossover** with volume confirmation
 - **Market regime detection** (trending, ranging, volatile) with adaptive filtering
@@ -13,6 +13,8 @@ A sophisticated cryptocurrency trading signal bot for Binance Futures with advan
 - **Multiple take profit levels** (1.5%, 3%, 5%, 8%)
 
 ### **Intelligent Risk Management**
+- **Leverage-based TP/SL calculation** that adapts to maximum available leverage per symbol
+- **Dynamic risk management** with tighter TP/SL for higher leverage, wider for lower leverage
 - **Market cap filtering** via CoinGecko API integration
 - **Leverage and margin type management** with Binance API integration
 - **Configurable signal cooldown** with timeframe-based logic
@@ -27,7 +29,7 @@ A sophisticated cryptocurrency trading signal bot for Binance Futures with advan
 - **Thread-safe multi-processing** with connection pooling
 - **Comprehensive error recovery** and graceful shutdown
 
-### **Advanced Rate Limiting System**
+### **Rate Limiting System**
 - **Weight-based API limiting** following Binance's exact specifications
 - **Real-time usage monitoring** with automatic queuing
 - **Safety margins** to prevent API bans (configurable 10% default)
@@ -35,7 +37,7 @@ A sophisticated cryptocurrency trading signal bot for Binance Futures with advan
 - **Concurrent request handling** with thread-safe operations
 - **Detailed logging** and usage statistics
 
-**For detailed rate limiting configuration and troubleshooting, see [RATE_LIMITING_GUIDE.md](RATE_LIMITING_GUIDE.md)**
+**For detailed rate limiting configuration and troubleshooting, see [Rate Limiting Guide](docs/RATE_LIMITING_GUIDE.md)**
 
 ## **Rate Limiting Protection**
 
@@ -78,7 +80,7 @@ RATE_LIMIT_MAX_RETRIES=3
 RATE_LIMIT_DETAILED_LOGGING=1
 ```
 
-## **Advanced Architecture**
+## **Architecture**
 
 ### **Lazy Loading System**
 
@@ -169,6 +171,44 @@ UNCLEAR     # Insufficient data (signals cautious)
 - **Price action analysis**: Detects breakouts, ranges, and volatility
 - **Adaptive filtering**: Rejects inappropriate signals for current regime
 - **Risk adjustment**: Modifies signal confidence based on market state
+
+### **Leverage-Based TP/SL System**
+
+The bot features leverage-based risk management system that automatically adapts take profit and stop loss levels based on the maximum available leverage for each trading symbol.
+
+**For detailed leverage system configuration and examples, see [Leverage System Guide](docs/LEVERAGE_SYSTEM_GUIDE.md)**
+
+#### **How It Works**
+```
+Max Leverage Detection:
+├── Fetch max leverage from Binance API per symbol
+├── Cache results to avoid repeated API calls
+└── Fallback to default (20x) if API fails
+
+TP/SL Calculation:
+├── Higher leverage = Tighter TP/SL (faster profit/loss)
+├── Lower leverage = Wider TP/SL (more room for movement)
+└── Consistent risk per trade regardless of leverage
+```
+
+#### **Example Calculations**
+```
+BTCUSDT with 50x leverage:
+├── SL Distance: 0.04% (2% ÷ 50)
+├── TP Distance: 0.02% (1% ÷ 50)
+└── Risk per Trade: 2% (0.04% × 50)
+
+BTCUSDT with 200x leverage:
+├── SL Distance: 0.01% (2% ÷ 200)
+├── TP Distance: 0.005% (1% ÷ 200)
+└── Risk per Trade: 2% (0.01% × 200)
+```
+
+#### **Benefits**
+- **Professional Risk Management**: Consistent risk per trade regardless of leverage
+- **Automatic Adaptation**: Adjusts to each symbol's maximum leverage
+- **Better Performance**: Higher leverage = faster profit taking
+- **Fallback Safety**: Uses fixed percentages if leverage system fails
 
 ### **Higher Timeframe Confirmation**
 
@@ -262,6 +302,31 @@ TIMEFRAMES=15m,30m,1h,4h
 HISTORY_CANDLES=200  # Maximum: 1500 (Binance limit)
 ```
 
+### **Environment Variable Dependencies**
+
+**⚠️ Important**: Some variables have dependencies and may override others:
+
+#### **TP/SL Calculation System**
+- **`LEVERAGE_BASED_TP_SL_ENABLED=1`** → Uses leverage-based calculation
+  - Uses: `LEVERAGE_BASE_RISK_PERCENT`, `LEVERAGE_BASE_TP_PERCENT`, etc.
+  - Fallback: `MAX_LEVERAGE` when Binance API fails
+  - Ignores: `DEFAULT_SL_PERCENT`, `DEFAULT_TP_PERCENTS`
+- **`LEVERAGE_BASED_TP_SL_ENABLED=0`** → Uses fixed percentage calculation
+  - Uses: `DEFAULT_SL_PERCENT`, `DEFAULT_TP_PERCENTS`
+  - Ignores: All `LEVERAGE_*` variables and `MAX_LEVERAGE`
+
+#### **Symbol Selection System**
+- **`MAX_SYMBOLS=0`** → Unlimited symbols (uses all filtered symbols)
+- **`MAX_SYMBOLS>0`** → Limits to specified number of symbols
+- **`SYMBOL_SELECTION_STRATEGY`** → Only applies when `MAX_SYMBOLS>0`
+
+#### **Market Cap Filtering**
+- **`FILTER_BY_MARKET_CAP=1`** → Enables market cap filtering
+  - Requires: `MIN_MARKET_CAP_USD` to be set
+  - Requires: CoinGecko API (pycoingecko library)
+- **`FILTER_BY_MARKET_CAP=0`** → Disables market cap filtering
+  - Ignores: `MIN_MARKET_CAP_USD`
+
 ### **Rate Limiting Configuration**
 ```bash
 # Enable rate limiting (HIGHLY RECOMMENDED)
@@ -296,11 +361,30 @@ DB_CLEANUP_INTERVAL_HOURS=6
 ```
 
 ### **Risk Management**
+
+#### **Leverage-Based TP/SL System (Recommended)**
 ```bash
-DEFAULT_SL_PERCENT=0.02
-DEFAULT_TP_PERCENTS=0.015,0.03,0.05,0.08
-MAX_LEVERAGE=20
-FILTER_BY_MARKET_CAP=0
+# Enable leverage-based calculation (automatically adapts TP/SL to leverage)
+LEVERAGE_BASED_TP_SL_ENABLED=1
+LEVERAGE_BASE_RISK_PERCENT=2.0      # Base risk per trade (2%)
+LEVERAGE_BASE_TP_PERCENT=1.0        # Base TP distance (1%)
+LEVERAGE_MIN_SL_DISTANCE=0.1        # Minimum SL distance (0.1%)
+LEVERAGE_MAX_SL_DISTANCE=5.0        # Maximum SL distance (5.0%)
+LEVERAGE_MIN_TP_DISTANCE=0.2        # Minimum TP distance (0.2%)
+LEVERAGE_MAX_TP_DISTANCE=3.0        # Maximum TP distance (3.0%)
+```
+
+#### **Fixed Percentage System (Fallback)**
+```bash
+# These settings are used when LEVERAGE_BASED_TP_SL_ENABLED=0
+DEFAULT_SL_PERCENT=0.02              # Fixed 2% stop loss
+DEFAULT_TP_PERCENTS=0.015,0.03,0.05,0.08  # Fixed TP levels
+```
+
+#### **Other Risk Settings**
+```bash
+MAX_LEVERAGE=20                      # Fallback leverage when Binance API fails
+FILTER_BY_MARKET_CAP=0               # Market cap filtering (0=disabled)
 ```
 
 ## **Operation Modes**
@@ -411,7 +495,7 @@ docker exec trading-bot ls -la trading_bot.db
 
 ### **Rate Limiting Issues**
 
-**For comprehensive rate limiting troubleshooting, see [RATE_LIMITING_GUIDE.md](RATE_LIMITING_GUIDE.md)**
+**For comprehensive rate limiting troubleshooting, see [Rate Limiting Guide](docs/RATE_LIMITING_GUIDE.md)**
 
 #### **High Usage Warnings**
 ```bash
@@ -475,6 +559,37 @@ docker logs trading-bot | grep -i "websocket\|connection"
 telnet fstream.binance.com 443
 ```
 
+### **Leverage System Issues**
+
+#### **Leverage API Failures**
+```bash
+# Check leverage system logs
+docker logs trading-bot | grep -i "leverage\|max_leverage"
+
+# Common issues:
+# 1. API key doesn't have futures permissions
+# 2. Rate limiting blocking leverage requests
+# 3. Symbol not found in leverage brackets
+
+# Solutions:
+# 1. Enable futures trading on Binance API key
+# 2. Increase rate limit safety margin
+# 3. Check symbol name format (must be exact, e.g., BTCUSDT)
+```
+
+#### **TP/SL Calculation Issues**
+```bash
+# Test leverage system
+python test_leverage_system.py
+
+# Check configuration
+docker logs trading-bot | grep "LEVERAGE_BASED_TP_SL_ENABLED"
+
+# If leverage system fails, bot falls back to fixed percentages
+# Check fallback logs:
+docker logs trading-bot | grep "fallback\|default"
+```
+
 ### **Database Issues**
 ```bash
 # Check database size
@@ -526,6 +641,18 @@ def check_signal(df):
 def calculate_position_size(symbol, price, atr):
     # Your custom position sizing logic
     pass
+```
+
+### **Testing Leverage System**
+```bash
+# Test the leverage-based TP/SL system
+python test_leverage_system.py
+
+# This will show:
+# - Configuration values
+# - Leverage math examples
+# - Real API calls (if API keys are set)
+# - TP/SL calculations for different leverage levels
 ```
 
 ### **Database Queries**
